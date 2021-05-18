@@ -40,6 +40,7 @@ static int _port = 19400, _fps = 15;
 int capture_initialize();
 void capture_terminate();
 void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data);
+void send_picture();
 
 static void print_usage()
 {
@@ -240,10 +241,6 @@ void capture_acquire()
     {
         if (capture_initialized)
         {
-            if (last_send_ticks != 0 && (SDL_GetTicks() - last_send_ticks) < SDL_max(0, (1000 / _fps) - 17))
-            {
-                return;
-            }
             if (texture_id != 0 && glIsTexture(texture_id))
             {
                 VT_DeleteTexture(context_id, texture_id);
@@ -252,43 +249,14 @@ void capture_acquire()
             VT_STATUS_T vtStatus = VT_GenerateTexture(resource_id, context_id, &texture_id, &output_info);
             if (vtStatus == VT_OK)
             {
-                int width = resolution.w, height = resolution.h;
-
-                glBindFramebuffer(GL_FRAMEBUFFER, offscreen_fb);
-
-                glBindTexture(GL_TEXTURE_2D, texture_id);
-
-                //Bind the texture to your FBO
-                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture_id, 0);
-
-                //Test if everything failed
-                GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-                if (status != GL_FRAMEBUFFER_COMPLETE)
+                if (last_send_ticks == 0 || (SDL_GetTicks() - last_send_ticks) >= SDL_max(0, (1000 / _fps) - 16))
                 {
-                    fprintf(stderr, "failed to make complete framebuffer object %x", status);
-                }
-
-                glViewport(0, 0, width, height);
-                if (pixels_rgba)
-                {
-                    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels_rgba);
-                    for (int y = 0; y < height; y++)
-                    {
-                        for (int x = 0; x < width; x++)
-                        {
-                            int i1 = (y * width) + x, i2 = ((height - y - 1) * width) + x;
-                            pixels_rgb[i1 * 3 + 0] = pixels_rgba[i2 * 4 + 0];
-                            pixels_rgb[i1 * 3 + 1] = pixels_rgba[i2 * 4 + 1];
-                            pixels_rgb[i1 * 3 + 2] = pixels_rgba[i2 * 4 + 2];
-                        }
-                    }
-                    hyperion_set_image(pixels_rgb, width, height);
-
+                    send_picture();
                     Uint32 end_ticks = SDL_GetTicks();
                     last_send_ticks = end_ticks;
                     if ((end_ticks - fps_ticks) >= 1000)
                     {
-                        printf("capture speed %d FPS (requested %d)\n", (int)(framecount * 1000.0 / (end_ticks - fps_ticks)), _fps);
+                        printf("Capture speed %d FPS (requested %d)\n", (int)(framecount * 1000.0 / (end_ticks - fps_ticks)), _fps);
                         fps_ticks = end_ticks;
                         framecount = 0;
                     }
@@ -297,8 +265,6 @@ void capture_acquire()
                         framecount++;
                     }
                 }
-
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
             }
             else
             {
@@ -327,4 +293,43 @@ void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data)
         fprintf(stderr, "UNKNOWN event received\n");
         break;
     }
+}
+
+void send_picture()
+{
+    int width = resolution.w, height = resolution.h;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, offscreen_fb);
+
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+
+    //Bind the texture to your FBO
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture_id, 0);
+
+    //Test if everything failed
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE)
+    {
+        fprintf(stderr, "failed to make complete framebuffer object %x", status);
+    }
+
+    glViewport(0, 0, width, height);
+
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels_rgba);
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            int i1 = (y * width) + x, i2 = ((height - y - 1) * width) + x;
+            pixels_rgb[i1 * 3 + 0] = pixels_rgba[i2 * 4 + 0];
+            pixels_rgb[i1 * 3 + 1] = pixels_rgba[i2 * 4 + 1];
+            pixels_rgb[i1 * 3 + 2] = pixels_rgba[i2 * 4 + 2];
+        }
+    }
+    if (hyperion_set_image(pixels_rgb, width, height) != 0)
+    {
+        fprintf(stderr, "Write timeout\n");
+        app_quit = true;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }

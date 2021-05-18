@@ -13,7 +13,7 @@
 #include "hyperion_request_builder.h"
 #include "hyperion_reply_reader.h"
 
-static void _send_message(const void *buffer, size_t size);
+static int _send_message(const void *buffer, size_t size);
 static bool _parse_reply(hyperionnet_Reply_table_t reply);
 
 static int sockfd;
@@ -40,12 +40,6 @@ int hyperion_client(const char *origin, const char *hostname, int port, int prio
     timeout.tv_sec = 5;
     timeout.tv_usec = 0;
 
-    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout,
-                   sizeof(timeout)) < 0)
-    {
-        fprintf(stderr, "setsockopt failed\n");
-        return 1;
-    }
     if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout,
                    sizeof(timeout)) < 0)
     {
@@ -97,7 +91,7 @@ int hyperion_destroy()
     close(sockfd);
 }
 
-void hyperion_set_image(const unsigned char *image, int width, int height)
+int hyperion_set_image(const unsigned char *image, int width, int height)
 {
     flatbuffers_builder_t B;
     flatcc_builder_init(&B);
@@ -107,12 +101,13 @@ void hyperion_set_image(const unsigned char *image, int width, int height)
     hyperionnet_Request_ref_t req = hyperionnet_Request_create_as_root(&B, hyperionnet_Command_as_Image(imageReq));
     size_t size;
     void *buf = flatcc_builder_finalize_buffer(&B, &size);
-    _send_message(buf, size);
+    int ret = _send_message(buf, size);
     free(buf);
     flatcc_builder_clear(&B);
+    return ret;
 }
 
-void hyperion_set_register(const char *origin, int priority)
+int hyperion_set_register(const char *origin, int priority)
 {
     flatbuffers_builder_t B;
     flatcc_builder_init(&B);
@@ -129,22 +124,25 @@ void hyperion_set_register(const char *origin, int priority)
     };
 
     // write message
-    write(sockfd, header, 4);
-    write(sockfd, buf, size);
+    int ret = 0;
+    if (write(sockfd, header, 4) < 0)
+        ret = -1;
+    if (write(sockfd, buf, size) < 0)
+        ret = -1;
 
     free(buf);
     flatcc_builder_clear(&B);
+    return ret;
 }
 
-void _send_message(const void *buffer, size_t size)
+int _send_message(const void *buffer, size_t size)
 {
     if (!_connected)
-        return;
+        return 0;
 
     if (!_registered)
     {
-        hyperion_set_register(_origin, _priority);
-        return;
+        return hyperion_set_register(_origin, _priority);
     }
 
     const uint8_t header[] = {
@@ -154,8 +152,12 @@ void _send_message(const void *buffer, size_t size)
         (uint8_t)(size & 0xFF)};
 
     // write message
-    write(sockfd, header, 4);
-    write(sockfd, buffer, size);
+    int ret = 0;
+    if (write(sockfd, header, 4) < 0)
+        ret = -1;
+    if (write(sockfd, buffer, size) < 0)
+        ret = -1;
+    return ret;
 }
 
 bool _parse_reply(hyperionnet_Reply_table_t reply)
