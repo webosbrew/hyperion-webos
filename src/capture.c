@@ -2,12 +2,22 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <getopt.h>
 
 #include <SDL.h>
 #include <SDL_opengles2.h>
 #include <vt/vt_openapi.h>
 
 #include "hyperion_client.h"
+
+static struct option long_options[] = {
+    {"width", optional_argument, 0, 'x'},
+    {"height", optional_argument, 0, 'y'},
+    {"address", required_argument, 0, 'a'},
+    {"port", optional_argument, 0, 'p'},
+    {"fps", optional_argument, 0, 'f'},
+    {0, 0, 0, 0},
+};
 
 SDL_Window *sdl_window;
 SDL_GLContext egl;
@@ -24,13 +34,72 @@ bool capture_initialized = false;
 bool vt_available = false;
 
 VT_RESOLUTION_T resolution = {192, 108};
+static const char *_address = NULL;
+static int _port = 19400, _fps = 15;
 
 int capture_initialize();
 void capture_terminate();
 void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data);
 
+static void print_usage()
+{
+    printf("Usage: hyperion-webos -a ADDRESS [OPTION]...\n");
+    printf("\n");
+    printf("Grab screen content continously and send to Hyperion via flatbuffers server.\n");
+    printf("\n");
+    printf("  -x, --width           Width of video frame (default 192)\n");
+    printf("  -y, --height          Height of video frame (default 108)\n");
+    printf("  -a, --address         IP address of Hyperion server\n");
+    printf("  -p, --port            Port of Hyperion flatbuffers server (default 19400)\n");
+    printf("  -f, --fps             Framerate for sending video frames (default 15)\n");
+}
+
+static int parse_options(int argc, char *argv[])
+{
+    int opt, longindex;
+    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:", long_options, &longindex)) != -1)
+    {
+        switch (opt)
+        {
+        case 'x':
+            resolution.w = atoi(optarg);
+            break;
+        case 'y':
+            resolution.h = atoi(optarg);
+            break;
+        case 'a':
+            _address = strdup(optarg);
+            break;
+        case 'p':
+            _port = atol(optarg);
+            break;
+        case 'f':
+            _fps = atoi(optarg);
+            break;
+        }
+    }
+    if (!_address)
+    {
+        fprintf(stderr, "Error! Address not specified.\n");
+        print_usage();
+        return 1;
+    }
+    if (_fps < 1 || _fps > 60)
+    {
+        fprintf(stderr, "Error! FPS should between 1 and 60.\n");
+        print_usage();
+        return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
+    int ret;
+    if ((ret = parse_options(argc, argv)) != 0)
+    {
+        return ret;
+    }
     if (SDL_getenv("XDG_RUNTIME_DIR") == NULL)
     {
         SDL_setenv("XDG_RUNTIME_DIR", "/tmp/xdg", 1);
@@ -53,14 +122,13 @@ int main(int argc, char *argv[])
     glGenFramebuffers(1, &offscreen_fb);
     SDL_assert(offscreen_fb);
 
-    int ret;
     if ((ret = capture_initialize()) != 0)
     {
         return ret;
     }
     pixels_rgba = (GLubyte *)calloc(resolution.w * resolution.h, 4 * sizeof(GLubyte));
     pixels_rgb = (GLubyte *)calloc(resolution.w * resolution.h, 3 * sizeof(GLubyte));
-    hyperion_client("webos", "192.168.4.120", 19400, 150);
+    hyperion_client("webos", _address, _port, 150);
     while (!app_quit)
     {
         SDL_Event evt;
@@ -171,9 +239,8 @@ void capture_acquire()
     {
         if (capture_initialized)
         {
-            if (last_send_ticks != 0 && (SDL_GetTicks() - last_send_ticks) < 30)
+            if (last_send_ticks != 0 && (SDL_GetTicks() - last_send_ticks) < SDL_max(0, (1000 / _fps) - 9))
             {
-                // Cap frame to 30fps
                 return;
             }
             if (texture_id != 0 && glIsTexture(texture_id))
@@ -215,7 +282,19 @@ void capture_acquire()
                         }
                     }
                     hyperion_set_image(pixels_rgb, width, height);
-                    last_send_ticks = SDL_GetTicks();
+
+                    Uint32 end_ticks = SDL_GetTicks();
+                    last_send_ticks = end_ticks;
+                    if ((end_ticks - fps_ticks) >= 1000)
+                    {
+                        printf("capture speed %d FPS (requested %d)\n", (int)(framecount * 1000.0 / (end_ticks - fps_ticks)), _fps);
+                        fps_ticks = end_ticks;
+                        framecount = 0;
+                    }
+                    else
+                    {
+                        framecount++;
+                    }
                 }
 
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -226,18 +305,6 @@ void capture_acquire()
             }
         }
         vt_available = false;
-    }
-
-    Uint32 end_ticks = SDL_GetTicks();
-    if ((end_ticks - fps_ticks) >= 1000)
-    {
-        fprintf(stderr, "capture speed %d FPS\n", (int)(framecount * 1000.0 / (end_ticks - fps_ticks)));
-        fps_ticks = end_ticks;
-        framecount = 0;
-    }
-    else
-    {
-        framecount++;
     }
 }
 
