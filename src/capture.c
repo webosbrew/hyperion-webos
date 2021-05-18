@@ -151,6 +151,7 @@ int main(int argc, char *argv[])
 
         if (hyperion_read() < 0)
         {
+            fprintf(stderr, "Connection terminated.\n");
             app_quit = true;
         }
     }
