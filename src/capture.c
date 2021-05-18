@@ -240,7 +240,7 @@ void capture_acquire()
     {
         if (capture_initialized)
         {
-            if (last_send_ticks != 0 && (SDL_GetTicks() - last_send_ticks) < SDL_max(0, (1000 / _fps) - 9))
+            if (last_send_ticks != 0 && (SDL_GetTicks() - last_send_ticks) < SDL_max(0, (1000 / _fps) - 17))
             {
                 return;
             }
