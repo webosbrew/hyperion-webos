@@ -10,6 +10,7 @@
 #include <EGL/egl.h>
 #include <vt/vt_openapi.h>
 
+#include "debug.h"
 #include "hyperion_client.h"
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
@@ -22,15 +23,6 @@ static struct option long_options[] = {
     {"fps", optional_argument, 0, 'f'},
     {0, 0, 0, 0},
 };
-
-static const EGLint configAttribs[] = {
-    EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
-    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-    EGL_BLUE_SIZE, 8,
-    EGL_GREEN_SIZE, 8,
-    EGL_RED_SIZE, 8,
-    EGL_ALPHA_SIZE, 8,
-    EGL_NONE};
 
 EGLDisplay egl_display;
 EGLContext egl_context;
@@ -53,6 +45,8 @@ static const char *_address = NULL;
 static int _port = 19400, _fps = 15;
 
 void egl_init();
+void egl_cleanup();
+
 int capture_initialize();
 void capture_terminate();
 void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data);
@@ -142,13 +136,7 @@ int main(int argc, char *argv[])
 
     hyperion_destroy();
     capture_terminate();
-    // glDeleteFramebuffers(1, &offscreen_fb);
-    free(pixels_rgb);
-    free(pixels_rgba);
-
-    eglDestroyContext(egl_display, egl_context);
-
-    eglTerminate(egl_display);
+    egl_cleanup();
     return 0;
 }
 
@@ -167,6 +155,15 @@ void egl_init()
     // 2. Select an appropriate configuration
     EGLint numConfigs;
     EGLConfig eglCfg;
+
+    const EGLint configAttribs[] = {
+        EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+        EGL_BLUE_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_RED_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
+        EGL_NONE};
 
     eglChooseConfig(egl_display, configAttribs, &eglCfg, 1, &numConfigs);
     assert(eglGetError() == EGL_SUCCESS);
@@ -189,7 +186,11 @@ void egl_init()
     assert(eglGetError() == EGL_SUCCESS);
 
     // 5. Create a context and make it current
-    egl_context = eglCreateContext(egl_display, eglCfg, EGL_NO_CONTEXT, NULL);
+
+    EGLint contextAttribs[] = {
+        EGL_CONTEXT_CLIENT_VERSION, 2,
+        EGL_NONE};
+    egl_context = eglCreateContext(egl_display, eglCfg, EGL_NO_CONTEXT, contextAttribs);
     assert(eglGetError() == EGL_SUCCESS);
     assert(egl_context);
 
@@ -201,6 +202,22 @@ void egl_init()
     eglQuerySurface(egl_display, egl_surface, EGL_HEIGHT, &suf_height);
     assert(eglGetError() == EGL_SUCCESS);
     printf("EGL Surface size: %dx%d\n", suf_width, suf_height);
+
+    // Create framebuffer for offscreen rendering
+    GL_CHECK(glGenFramebuffers(1, &offscreen_fb));
+    GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, offscreen_fb));
+
+    printf("EGL init complete");
+}
+
+void egl_cleanup()
+{
+    glDeleteFramebuffers(1, &offscreen_fb);
+    eglDestroyContext(egl_display, egl_context);
+    eglDestroySurface(egl_display, egl_surface);
+    eglTerminate(egl_display);
+    free(pixels_rgb);
+    free(pixels_rgba);
 }
 
 int capture_initialize()
@@ -261,6 +278,8 @@ int capture_initialize()
 
 void capture_terminate()
 {
+    if (!capture_initialized)
+        return;
     capture_initialized = false;
 
     if (texture_id != 0 && glIsTexture(texture_id))
@@ -318,6 +337,7 @@ void capture_acquire()
             }
             else
             {
+                fprintf(stderr, "VT_GenerateTexture failed\n");
                 texture_id = 0;
             }
         }
@@ -349,7 +369,7 @@ void send_picture()
 {
     int width = resolution.w, height = resolution.h;
 
-    // glBindFramebuffer(GL_FRAMEBUFFER, offscreen_fb);
+    glBindFramebuffer(GL_FRAMEBUFFER, offscreen_fb);
 
     glBindTexture(GL_TEXTURE_2D, texture_id);
 
