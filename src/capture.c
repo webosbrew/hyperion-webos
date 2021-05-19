@@ -25,26 +25,17 @@ static struct option long_options[] = {
 
 static const EGLint configAttribs[] = {
     EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
     EGL_BLUE_SIZE, 8,
     EGL_GREEN_SIZE, 8,
     EGL_RED_SIZE, 8,
-    EGL_DEPTH_SIZE, 8,
-    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES_BIT,
+    EGL_ALPHA_SIZE, 8,
     EGL_NONE};
 
-static const int pbufferWidth = 192;
-static const int pbufferHeight = 108;
-
-static const EGLint pbufferAttribs[] = {
-    EGL_WIDTH,
-    192,
-    EGL_HEIGHT,
-    108,
-    EGL_NONE,
-};
-
 EGLDisplay egl_display;
-EGLContext egl;
+EGLContext egl_context;
+EGLSurface egl_surface;
+
 VT_VIDEO_WINDOW_ID window_id;
 VT_RESOURCE_ID resource_id;
 VT_CONTEXT_ID context_id;
@@ -61,6 +52,7 @@ VT_RESOLUTION_T resolution = {192, 108};
 static const char *_address = NULL;
 static int _port = 19400, _fps = 15;
 
+void egl_init();
 int capture_initialize();
 void capture_terminate();
 void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data);
@@ -129,35 +121,8 @@ int main(int argc, char *argv[])
     {
         setenv("XDG_RUNTIME_DIR", "/tmp/xdg", 1);
     }
-    // 1. Initialize EGL
-    egl_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    assert(egl_display);
-    EGLint major, minor;
 
-    eglInitialize(egl_display, &major, &minor);
-    printf("EGL Display, major = %d, minor = %d", major, minor);
-
-    // 2. Select an appropriate configuration
-    EGLint numConfigs;
-    EGLConfig eglCfg;
-
-    eglChooseConfig(egl_display, configAttribs, &eglCfg, 1, &numConfigs);
-
-    // 3. Create a surface
-    EGLSurface eglSurf = eglCreatePbufferSurface(egl_display, eglCfg,
-                                                 pbufferAttribs);
-
-    // 4. Bind the API
-    eglBindAPI(EGL_OPENGL_API);
-
-    // 5. Create a context and make it current
-    egl = eglCreateContext(egl_display, eglCfg, EGL_NO_CONTEXT, NULL);
-    assert(egl);
-
-    eglMakeCurrent(egl_display, eglSurf, eglSurf, egl);
-
-    // glGenFramebuffers(1, &offscreen_fb);
-    // assert(offscreen_fb);
+    egl_init();
 
     if ((ret = capture_initialize()) != 0)
     {
@@ -181,10 +146,61 @@ int main(int argc, char *argv[])
     free(pixels_rgb);
     free(pixels_rgba);
 
-    eglDestroyContext(egl_display, egl);
+    eglDestroyContext(egl_display, egl_context);
 
     eglTerminate(egl_display);
     return 0;
+}
+
+void egl_init()
+{
+    // 1. Initialize egl
+    egl_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    assert(eglGetError() == EGL_SUCCESS);
+    assert(egl_display);
+    EGLint major, minor;
+
+    eglInitialize(egl_display, &major, &minor);
+    assert(eglGetError() == EGL_SUCCESS);
+    printf("EGL Display, major = %d, minor = %d\n", major, minor);
+
+    // 2. Select an appropriate configuration
+    EGLint numConfigs;
+    EGLConfig eglCfg;
+
+    eglChooseConfig(egl_display, configAttribs, &eglCfg, 1, &numConfigs);
+    assert(eglGetError() == EGL_SUCCESS);
+
+    // 3. Create a surface
+
+    EGLint pbufferAttribs[] = {
+        EGL_WIDTH, resolution.w,
+        EGL_HEIGHT, resolution.h,
+        EGL_TEXTURE_FORMAT, EGL_TEXTURE_RGBA,
+        EGL_TEXTURE_TARGET, EGL_TEXTURE_2D,
+        EGL_LARGEST_PBUFFER, EGL_TRUE,
+        EGL_NONE};
+    egl_surface = eglCreatePbufferSurface(egl_display, eglCfg, pbufferAttribs);
+    assert(eglGetError() == EGL_SUCCESS);
+    assert(egl_surface);
+
+    // 4. Bind the API
+    eglBindAPI(EGL_OPENGL_ES_API);
+    assert(eglGetError() == EGL_SUCCESS);
+
+    // 5. Create a context and make it current
+    egl_context = eglCreateContext(egl_display, eglCfg, EGL_NO_CONTEXT, NULL);
+    assert(eglGetError() == EGL_SUCCESS);
+    assert(egl_context);
+
+    eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
+    assert(eglGetError() == EGL_SUCCESS);
+
+    EGLint suf_width, suf_height;
+    eglQuerySurface(egl_display, egl_surface, EGL_WIDTH, &suf_width);
+    eglQuerySurface(egl_display, egl_surface, EGL_HEIGHT, &suf_height);
+    assert(eglGetError() == EGL_SUCCESS);
+    printf("EGL Surface size: %dx%d\n", suf_width, suf_height);
 }
 
 int capture_initialize()
@@ -205,7 +221,7 @@ int capture_initialize()
     fprintf(stderr, "[Capture Sample] resource_id=%d\n", resource_id);
 
     context_id = VT_CreateContext(resource_id, 2);
-    if (context_id == -1)
+    if (!context_id || context_id == -1)
     {
         fprintf(stderr, "[Capture Sample] VT_CreateContext Failed\n");
         VT_ReleaseVideoWindowResource(resource_id);
@@ -333,7 +349,7 @@ void send_picture()
 {
     int width = resolution.w, height = resolution.h;
 
-    glBindFramebuffer(GL_FRAMEBUFFER, offscreen_fb);
+    // glBindFramebuffer(GL_FRAMEBUFFER, offscreen_fb);
 
     glBindTexture(GL_TEXTURE_2D, texture_id);
 
