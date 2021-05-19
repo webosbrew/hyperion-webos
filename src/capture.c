@@ -6,6 +6,8 @@
 #include <getopt.h>
 #include <time.h>
 
+#include <pthread.h>
+
 #include <GLES2/gl2.h>
 #include <EGL/egl.h>
 #include <vt/vt_openapi.h>
@@ -27,6 +29,8 @@ static struct option long_options[] = {
 EGLDisplay egl_display;
 EGLContext egl_context;
 EGLSurface egl_surface;
+
+pthread_mutex_t frame_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 VT_VIDEO_WINDOW_ID window_id;
 VT_RESOURCE_ID resource_id;
@@ -304,6 +308,7 @@ uint32_t getticks()
 
 void capture_acquire()
 {
+    pthread_mutex_lock(&frame_mutex);
     static uint32_t fps_ticks = 0, last_send_ticks = 0, framecount = 0;
     VT_OUTPUT_INFO_T output_info;
     if (vt_available)
@@ -343,6 +348,7 @@ void capture_acquire()
         }
         vt_available = false;
     }
+    pthread_mutex_unlock(&frame_mutex);
 }
 
 void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data)
@@ -399,6 +405,7 @@ void send_picture()
     if (hyperion_set_image(pixels_rgb, width, height) != 0)
     {
         fprintf(stderr, "Write timeout\n");
+        hyperion_destroy();
         app_quit = true;
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);

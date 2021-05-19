@@ -13,4 +13,4 @@ add_executable(hyperion-webos
     src/hyperion_client.c
  )
 target_include_directories(hyperion-webos PRIVATE fbs)
-target_link_libraries(hyperion-webos vt flatccrt PkgConfig::OpenGL)
+target_link_libraries(hyperion-webos vt flatccrt pthread PkgConfig::OpenGL)

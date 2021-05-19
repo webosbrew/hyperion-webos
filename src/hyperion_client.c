@@ -70,6 +70,8 @@ int hyperion_client(const char *origin, const char *hostname, int port, int prio
 
 int hyperion_read()
 {
+    if (!sockfd)
+        return -1;
     uint8_t headbuff[4];
     int n = read(sockfd, headbuff, 4);
     uint32_t messageSize =
@@ -88,7 +90,11 @@ int hyperion_read()
 
 int hyperion_destroy()
 {
+    if (!sockfd)
+        return 0;
     close(sockfd);
+    sockfd = 0;
+    return 0;
 }
 
 int hyperion_set_image(const unsigned char *image, int width, int height)
@@ -109,6 +115,8 @@ int hyperion_set_image(const unsigned char *image, int width, int height)
 
 int hyperion_set_register(const char *origin, int priority)
 {
+    if (!sockfd)
+        return 0;
     flatbuffers_builder_t B;
     flatcc_builder_init(&B);
     hyperionnet_Register_ref_t registerReq = hyperionnet_Register_create(&B, flatcc_builder_create_string_str(&B, origin), priority);
@@ -137,6 +145,8 @@ int hyperion_set_register(const char *origin, int priority)
 
 int _send_message(const void *buffer, size_t size)
 {
+    if (!sockfd)
+        return 0;
     if (!_connected)
         return 0;
 
