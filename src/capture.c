@@ -1,14 +1,18 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 #include <getopt.h>
+#include <time.h>
 
-#include <SDL.h>
-#include <SDL_opengles2.h>
+#include <GLES2/gl2.h>
+#include <EGL/egl.h>
 #include <vt/vt_openapi.h>
 
 #include "hyperion_client.h"
+
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
 static struct option long_options[] = {
     {"width", optional_argument, 0, 'x'},
@@ -19,8 +23,28 @@ static struct option long_options[] = {
     {0, 0, 0, 0},
 };
 
-SDL_Window *sdl_window;
-SDL_GLContext egl;
+static const EGLint configAttribs[] = {
+    EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+    EGL_BLUE_SIZE, 8,
+    EGL_GREEN_SIZE, 8,
+    EGL_RED_SIZE, 8,
+    EGL_DEPTH_SIZE, 8,
+    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES_BIT,
+    EGL_NONE};
+
+static const int pbufferWidth = 192;
+static const int pbufferHeight = 108;
+
+static const EGLint pbufferAttribs[] = {
+    EGL_WIDTH,
+    192,
+    EGL_HEIGHT,
+    108,
+    EGL_NONE,
+};
+
+EGLDisplay egl_display;
+EGLContext egl;
 VT_VIDEO_WINDOW_ID window_id;
 VT_RESOURCE_ID resource_id;
 VT_CONTEXT_ID context_id;
@@ -101,27 +125,39 @@ int main(int argc, char *argv[])
     {
         return ret;
     }
-    if (SDL_getenv("XDG_RUNTIME_DIR") == NULL)
+    if (getenv("XDG_RUNTIME_DIR") == NULL)
     {
-        SDL_setenv("XDG_RUNTIME_DIR", "/tmp/xdg", 1);
+        setenv("XDG_RUNTIME_DIR", "/tmp/xdg", 1);
     }
-    // Create an SDL Window
-    sdl_window = SDL_CreateWindow("Capture", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1920, 1080,
-                                  SDL_WINDOW_HIDDEN | SDL_WINDOW_FULLSCREEN | SDL_WINDOW_OPENGL);
+    // 1. Initialize EGL
+    egl_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    assert(egl_display);
+    EGLint major, minor;
 
-    if (sdl_window == NULL)
-    {
-        SDL_Log("Unable to create window: %s", SDL_GetError());
-        return 1;
-    }
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    eglInitialize(egl_display, &major, &minor);
+    printf("EGL Display, major = %d, minor = %d", major, minor);
 
-    // Create an EGL context. VT will use EGL so this is important
-    egl = SDL_GL_CreateContext(sdl_window);
-    glGenFramebuffers(1, &offscreen_fb);
-    SDL_assert(offscreen_fb);
+    // 2. Select an appropriate configuration
+    EGLint numConfigs;
+    EGLConfig eglCfg;
+
+    eglChooseConfig(egl_display, configAttribs, &eglCfg, 1, &numConfigs);
+
+    // 3. Create a surface
+    EGLSurface eglSurf = eglCreatePbufferSurface(egl_display, eglCfg,
+                                                 pbufferAttribs);
+
+    // 4. Bind the API
+    eglBindAPI(EGL_OPENGL_API);
+
+    // 5. Create a context and make it current
+    egl = eglCreateContext(egl_display, eglCfg, EGL_NO_CONTEXT, NULL);
+    assert(egl);
+
+    eglMakeCurrent(egl_display, eglSurf, eglSurf, egl);
+
+    // glGenFramebuffers(1, &offscreen_fb);
+    // assert(offscreen_fb);
 
     if ((ret = capture_initialize()) != 0)
     {
@@ -132,24 +168,6 @@ int main(int argc, char *argv[])
     hyperion_client("webos", _address, _port, 150);
     while (!app_quit)
     {
-        SDL_Event evt;
-        while (SDL_PollEvent(&evt))
-        {
-            switch (evt.type)
-            {
-            case SDL_QUIT:
-                app_quit = true;
-                break;
-            case SDL_KEYUP:
-                switch (evt.key.keysym.scancode)
-                {
-                case SDL_WEBOS_SCANCODE_BACK:
-                    app_quit = true;
-                    break;
-                }
-            }
-        }
-
         if (hyperion_read() < 0)
         {
             fprintf(stderr, "Connection terminated.\n");
@@ -159,12 +177,13 @@ int main(int argc, char *argv[])
 
     hyperion_destroy();
     capture_terminate();
-    glDeleteFramebuffers(1, &offscreen_fb);
+    // glDeleteFramebuffers(1, &offscreen_fb);
     free(pixels_rgb);
     free(pixels_rgba);
 
-    SDL_GL_DeleteContext(egl);
-    SDL_DestroyWindow(sdl_window);
+    eglDestroyContext(egl_display, egl);
+
+    eglTerminate(egl_display);
     return 0;
 }
 
@@ -205,6 +224,14 @@ int capture_initialize()
         return -1;
     }
 
+    if (VT_SetTextureSourceLocation(context_id, VT_SOURCE_LOCATION_DISPLAY) != VT_OK)
+    {
+        fprintf(stderr, "[Capture Sample] VT_SetTextureSourceLocation Failed\n");
+        VT_DeleteContext(context_id);
+        VT_ReleaseVideoWindowResource(resource_id);
+        return -1;
+    }
+
     if (VT_RegisterEventHandler(context_id, &capture_onevent, NULL) != VT_OK)
     {
         fprintf(stderr, "[Capture Sample] VT_RegisterEventHandler Failed\n");
@@ -233,9 +260,16 @@ void capture_terminate()
     VT_ReleaseVideoWindowResource(resource_id);
 }
 
+uint32_t getticks()
+{
+    struct timespec tp;
+    clock_gettime(CLOCK_MONOTONIC, &tp);
+    return tp.tv_sec * 1000 + tp.tv_nsec / 1000000;
+}
+
 void capture_acquire()
 {
-    static Uint32 fps_ticks = 0, last_send_ticks = 0, framecount = 0;
+    static uint32_t fps_ticks = 0, last_send_ticks = 0, framecount = 0;
     VT_OUTPUT_INFO_T output_info;
     if (vt_available)
     {
@@ -249,10 +283,10 @@ void capture_acquire()
             VT_STATUS_T vtStatus = VT_GenerateTexture(resource_id, context_id, &texture_id, &output_info);
             if (vtStatus == VT_OK)
             {
-                if (last_send_ticks == 0 || (SDL_GetTicks() - last_send_ticks) >= SDL_max(0, (1000 / _fps) - 16))
+                if (last_send_ticks == 0 || (getticks() - last_send_ticks) >= MAX(0, (1000 / _fps) - 16))
                 {
                     send_picture();
-                    Uint32 end_ticks = SDL_GetTicks();
+                    uint32_t end_ticks = getticks();
                     last_send_ticks = end_ticks;
                     if ((end_ticks - fps_ticks) >= 1000)
                     {
