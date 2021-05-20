@@ -5,6 +5,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <time.h>
+#include <signal.h>
 
 #include <pthread.h>
 
@@ -46,7 +47,7 @@ bool vt_available = false;
 
 VT_RESOLUTION_T resolution = {192, 108};
 static const char *_address = NULL;
-static int _port = 19400, _fps = 15;
+static int _port = 19400, _fps = 15, _framedelay = 0;
 
 void egl_init();
 void egl_cleanup();
@@ -55,6 +56,18 @@ int capture_initialize();
 void capture_terminate();
 void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data);
 void send_picture();
+
+static void handle_signal(int signal)
+{
+    switch (signal)
+    {
+    case SIGINT:
+        app_quit = true;
+        break;
+    default:
+        break;
+    }
+}
 
 static void print_usage()
 {
@@ -99,12 +112,16 @@ static int parse_options(int argc, char *argv[])
         print_usage();
         return 1;
     }
-    if (_fps < 1 || _fps > 60)
+    if (_fps < 0 || _fps > 60)
     {
-        fprintf(stderr, "Error! FPS should between 1 and 60.\n");
+        fprintf(stderr, "Error! FPS should between 0 (unlimited) and 60.\n");
         print_usage();
         return 1;
     }
+    if (_fps == 0)
+        _framedelay = 0;
+    else
+        _framedelay = 1000 / _fps;
     return 0;
 }
 
@@ -124,11 +141,12 @@ int main(int argc, char *argv[])
 
     if ((ret = capture_initialize()) != 0)
     {
-        return ret;
+        goto cleanup;
     }
     pixels_rgba = (GLubyte *)calloc(resolution.w * resolution.h, 4 * sizeof(GLubyte));
     pixels_rgb = (GLubyte *)calloc(resolution.w * resolution.h, 3 * sizeof(GLubyte));
     hyperion_client("webos", _address, _port, 150);
+    signal(SIGINT, handle_signal);
     while (!app_quit)
     {
         if (hyperion_read() < 0)
@@ -137,11 +155,12 @@ int main(int argc, char *argv[])
             app_quit = true;
         }
     }
-
+    ret = 0;
+cleanup:
     hyperion_destroy();
     capture_terminate();
     egl_cleanup();
-    return 0;
+    return ret;
 }
 
 void egl_init()
@@ -154,7 +173,7 @@ void egl_init()
 
     eglInitialize(egl_display, &major, &minor);
     assert(eglGetError() == EGL_SUCCESS);
-    printf("EGL Display, major = %d, minor = %d\n", major, minor);
+    printf("[EGL] Display, major = %d, minor = %d\n", major, minor);
 
     // 2. Select an appropriate configuration
     EGLint numConfigs;
@@ -205,13 +224,13 @@ void egl_init()
     eglQuerySurface(egl_display, egl_surface, EGL_WIDTH, &suf_width);
     eglQuerySurface(egl_display, egl_surface, EGL_HEIGHT, &suf_height);
     assert(eglGetError() == EGL_SUCCESS);
-    printf("EGL Surface size: %dx%d\n", suf_width, suf_height);
+    printf("[EGL] Surface size: %dx%d\n", suf_width, suf_height);
 
     // Create framebuffer for offscreen rendering
     GL_CHECK(glGenFramebuffers(1, &offscreen_fb));
     GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, offscreen_fb));
 
-    printf("EGL init complete");
+    printf("[EGL] init complete\n");
 }
 
 void egl_cleanup()
@@ -226,52 +245,66 @@ void egl_cleanup()
 
 int capture_initialize()
 {
+    int32_t supported = 0;
+    if (VT_IsSystemSupported(&supported) != VT_OK || !supported)
+    {
+        fprintf(stderr, "[VT] VT_IsSystemSupported Failed. This TV doesn't support VT.\n");
+        return -1;
+    }
+
+    fprintf(stdout, "[VT] VT_CreateVideoWindow\n");
     window_id = VT_CreateVideoWindow(0);
     if (window_id == -1)
     {
-        fprintf(stderr, "[Capture Sample] VT_CreateVideoWindow Failed\n");
+        fprintf(stderr, "[VT] VT_CreateVideoWindow Failed\n");
         return -1;
     }
-    fprintf(stderr, "[Capture Sample] window_id=%d\n", window_id);
+    fprintf(stdout, "[VT] window_id=%d\n", window_id);
 
+    fprintf(stdout, "[VT] VT_AcquireVideoWindowResource\n");
     if (VT_AcquireVideoWindowResource(window_id, &resource_id) != VT_OK)
     {
-        fprintf(stderr, "[Capture Sample] VT_AcquireVideoWindowResource Failed\n");
+        fprintf(stderr, "[VT] VT_AcquireVideoWindowResource Failed\n");
         return -1;
     }
-    fprintf(stderr, "[Capture Sample] resource_id=%d\n", resource_id);
+    fprintf(stdout, "[VT] resource_id=%d\n", resource_id);
 
+    fprintf(stdout, "[VT] VT_CreateContext\n");
     context_id = VT_CreateContext(resource_id, 2);
     if (!context_id || context_id == -1)
     {
-        fprintf(stderr, "[Capture Sample] VT_CreateContext Failed\n");
+        fprintf(stderr, "[VT] VT_CreateContext Failed\n");
         VT_ReleaseVideoWindowResource(resource_id);
         return -1;
     }
-    fprintf(stderr, "[Capture Sample] context_id=%d\n", context_id);
+    fprintf(stdout, "[VT] context_id=%d\n", context_id);
 
+    fprintf(stdout, "[VT] VT_SetTextureResolution\n");
     VT_SetTextureResolution(context_id, &resolution);
     // VT_GetTextureResolution(context_id, &resolution);
 
+    fprintf(stdout, "[VT] VT_SetTextureSourceRegion\n");
     if (VT_SetTextureSourceRegion(context_id, VT_SOURCE_REGION_MAX) != VT_OK)
     {
-        fprintf(stderr, "[Capture Sample] VT_SetTextureSourceRegion Failed\n");
+        fprintf(stderr, "[VT] VT_SetTextureSourceRegion Failed\n");
         VT_DeleteContext(context_id);
         VT_ReleaseVideoWindowResource(resource_id);
         return -1;
     }
 
+    fprintf(stdout, "[VT] VT_SetTextureSourceLocation\n");
     if (VT_SetTextureSourceLocation(context_id, VT_SOURCE_LOCATION_DISPLAY) != VT_OK)
     {
-        fprintf(stderr, "[Capture Sample] VT_SetTextureSourceLocation Failed\n");
+        fprintf(stderr, "[VT] VT_SetTextureSourceLocation Failed\n");
         VT_DeleteContext(context_id);
         VT_ReleaseVideoWindowResource(resource_id);
         return -1;
     }
 
+    fprintf(stdout, "[VT] VT_RegisterEventHandler\n");
     if (VT_RegisterEventHandler(context_id, &capture_onevent, NULL) != VT_OK)
     {
-        fprintf(stderr, "[Capture Sample] VT_RegisterEventHandler Failed\n");
+        fprintf(stderr, "[VT] VT_RegisterEventHandler Failed\n");
         VT_DeleteContext(context_id);
         VT_ReleaseVideoWindowResource(resource_id);
         return -1;
@@ -291,11 +324,14 @@ void capture_terminate()
         VT_DeleteTexture(context_id, texture_id);
     }
 
+    fprintf(stdout, "[VT] VT_UnRegisterEventHandler\n");
     if (VT_UnRegisterEventHandler(context_id) != VT_OK)
     {
-        fprintf(stderr, "[Capture Sample] VT_UnRegisterEventHandler error!\n");
+        fprintf(stderr, "[VT] VT_UnRegisterEventHandler error!\n");
     }
+    fprintf(stdout, "[VT] VT_DeleteContext\n");
     VT_DeleteContext(context_id);
+    fprintf(stdout, "[VT] VT_ReleaseVideoWindowResource\n");
     VT_ReleaseVideoWindowResource(resource_id);
 }
 
@@ -306,47 +342,52 @@ uint32_t getticks()
     return tp.tv_sec * 1000 + tp.tv_nsec / 1000000;
 }
 
-void capture_acquire()
+void capture_frame()
 {
+    if (!capture_initialized)
+        return;
     pthread_mutex_lock(&frame_mutex);
-    static uint32_t fps_ticks = 0, last_send_ticks = 0, framecount = 0;
+    static uint32_t last_ticks = 0, fps_ticks = 0, framecount = 0;
+    uint32_t ticks = getticks();
+    if (ticks - last_ticks < _framedelay)
+    {
+        pthread_mutex_unlock(&frame_mutex);
+        return;
+    }
+    last_ticks = ticks;
     VT_OUTPUT_INFO_T output_info;
     if (vt_available)
     {
-        if (capture_initialized)
+        if (texture_id != 0 && glIsTexture(texture_id))
         {
-            if (texture_id != 0 && glIsTexture(texture_id))
-            {
-                VT_DeleteTexture(context_id, texture_id);
-            }
+            VT_DeleteTexture(context_id, texture_id);
+        }
 
-            VT_STATUS_T vtStatus = VT_GenerateTexture(resource_id, context_id, &texture_id, &output_info);
-            if (vtStatus == VT_OK)
-            {
-                if (last_send_ticks == 0 || (getticks() - last_send_ticks) >= MAX(0, (1000 / _fps) - 16))
-                {
-                    send_picture();
-                    uint32_t end_ticks = getticks();
-                    last_send_ticks = end_ticks;
-                    if ((end_ticks - fps_ticks) >= 1000)
-                    {
-                        printf("Capture speed %d FPS (requested %d)\n", (int)(framecount * 1000.0 / (end_ticks - fps_ticks)), _fps);
-                        fps_ticks = end_ticks;
-                        framecount = 0;
-                    }
-                    else
-                    {
-                        framecount++;
-                    }
-                }
-            }
-            else
-            {
-                fprintf(stderr, "VT_GenerateTexture failed\n");
-                texture_id = 0;
-            }
+        VT_STATUS_T vtStatus = VT_GenerateTexture(resource_id, context_id, &texture_id, &output_info);
+        if (vtStatus == VT_OK)
+        {
+            send_picture();
+        }
+        else
+        {
+            fprintf(stderr, "VT_GenerateTexture failed\n");
+            texture_id = 0;
         }
         vt_available = false;
+    }
+    framecount++;
+    if (fps_ticks == 0)
+    {
+        fps_ticks = ticks;
+    }
+    else if (ticks - fps_ticks >= 1000)
+    {
+        if (_fps == 0)
+            printf("[Stat] Send framerate: %d FPS (unlimited requested)\n", framecount);
+        else
+            printf("[Stat] Send framerate: %d FPS (%d requested)\n", framecount, _fps);
+        framecount = 0;
+        fps_ticks = ticks;
     }
     pthread_mutex_unlock(&frame_mutex);
 }
@@ -357,7 +398,7 @@ void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data)
     {
     case VT_AVAILABLE:
         vt_available = true;
-        capture_acquire();
+        capture_frame();
         break;
     case VT_UNAVAILABLE:
         fprintf(stderr, "VT_UNAVAILABLE received\n");
@@ -386,7 +427,7 @@ void send_picture()
     GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
     {
-        fprintf(stderr, "failed to make complete framebuffer object %x", status);
+        fprintf(stderr, "failed to make complete framebuffer object %x\n", status);
     }
 
     glViewport(0, 0, width, height);
@@ -408,5 +449,10 @@ void send_picture()
         hyperion_destroy();
         app_quit = true;
     }
+
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
