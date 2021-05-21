@@ -47,7 +47,7 @@ bool vt_available = false;
 
 VT_RESOLUTION_T resolution = {192, 108};
 static const char *_address = NULL;
-static int _port = 19400, _fps = 15, _framedelay = 0;
+static int _port = 19400, _fps = 15, _framedelay_us = 0;
 
 void egl_init();
 void egl_cleanup();
@@ -55,6 +55,7 @@ void egl_cleanup();
 int capture_initialize();
 void capture_terminate();
 void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data);
+void read_picture();
 void send_picture();
 
 static void handle_signal(int signal)
@@ -119,9 +120,9 @@ static int parse_options(int argc, char *argv[])
         return 1;
     }
     if (_fps == 0)
-        _framedelay = 0;
+        _framedelay_us = 0;
     else
-        _framedelay = 1000 / _fps;
+        _framedelay_us = 1000000 / _fps;
     return 0;
 }
 
@@ -335,11 +336,11 @@ void capture_terminate()
     VT_ReleaseVideoWindowResource(resource_id);
 }
 
-uint32_t getticks()
+uint64_t getticks_us()
 {
     struct timespec tp;
     clock_gettime(CLOCK_MONOTONIC, &tp);
-    return tp.tv_sec * 1000 + tp.tv_nsec / 1000000;
+    return tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
 }
 
 void capture_frame()
@@ -347,9 +348,10 @@ void capture_frame()
     if (!capture_initialized)
         return;
     pthread_mutex_lock(&frame_mutex);
-    static uint32_t last_ticks = 0, fps_ticks = 0, framecount = 0;
-    uint32_t ticks = getticks();
-    if (ticks - last_ticks < _framedelay)
+    static uint32_t framecount = 0;
+    static uint64_t last_ticks = 0, fps_ticks = 0, dur_gentexture = 0, dur_readframe = 0, dur_sendframe = 0;
+    uint64_t ticks = getticks_us(), trace_start, trace_end;
+    if (ticks - last_ticks < _framedelay_us)
     {
         pthread_mutex_unlock(&frame_mutex);
         return;
@@ -363,10 +365,22 @@ void capture_frame()
             VT_DeleteTexture(context_id, texture_id);
         }
 
+        trace_start = getticks_us();
         VT_STATUS_T vtStatus = VT_GenerateTexture(resource_id, context_id, &texture_id, &output_info);
+        trace_end = getticks_us();
+        dur_gentexture += trace_end - trace_start;
+        trace_start = trace_end;
         if (vtStatus == VT_OK)
         {
+            read_picture();
+            trace_end = getticks_us();
+            dur_readframe += trace_end - trace_start;
+            trace_start = trace_end;
             send_picture();
+            trace_end = getticks_us();
+            dur_sendframe += trace_end - trace_start;
+            trace_start = trace_end;
+            framecount++;
         }
         else
         {
@@ -375,18 +389,18 @@ void capture_frame()
         }
         vt_available = false;
     }
-    framecount++;
     if (fps_ticks == 0)
     {
         fps_ticks = ticks;
     }
-    else if (ticks - fps_ticks >= 1000)
+    else if (ticks - fps_ticks >= 1000000)
     {
-        if (_fps == 0)
-            printf("[Stat] Send framerate: %d FPS (unlimited requested)\n", framecount);
-        else
-            printf("[Stat] Send framerate: %d FPS (%d requested)\n", framecount, _fps);
+        printf("[Stat] Send framerate: %d FPS. gen %d us, read %d us, send %d us\n",
+               framecount, dur_gentexture, dur_readframe, dur_sendframe);
         framecount = 0;
+        dur_gentexture = 0;
+        dur_readframe = 0;
+        dur_sendframe = 0;
         fps_ticks = ticks;
     }
     pthread_mutex_unlock(&frame_mutex);
@@ -412,7 +426,7 @@ void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data)
     }
 }
 
-void send_picture()
+void read_picture()
 {
     int width = resolution.w, height = resolution.h;
 
@@ -443,16 +457,22 @@ void send_picture()
             pixels_rgb[i1 * 3 + 2] = pixels_rgba[i2 * 4 + 2];
         }
     }
-    if (hyperion_set_image(pixels_rgb, width, height) != 0)
-    {
-        fprintf(stderr, "Write timeout\n");
-        hyperion_destroy();
-        app_quit = true;
-    }
 
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
 
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void send_picture()
+{
+    int width = resolution.w, height = resolution.h;
+
+    if (hyperion_set_image(pixels_rgb, width, height) != 0)
+    {
+        fprintf(stderr, "Write timeout\n");
+        hyperion_destroy();
+        app_quit = true;
+    }
 }
