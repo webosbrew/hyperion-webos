@@ -33,7 +33,6 @@ EGLSurface egl_surface;
 
 pthread_mutex_t frame_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-VT_VIDEO_WINDOW_ID window_id;
 VT_RESOURCE_ID resource_id;
 VT_CONTEXT_ID context_id;
 GLuint texture_id = 0;
@@ -64,6 +63,7 @@ static void handle_signal(int signal)
     {
     case SIGINT:
         app_quit = true;
+        hyperion_destroy();
         break;
     default:
         break;
@@ -148,6 +148,7 @@ int main(int argc, char *argv[])
     pixels_rgb = (GLubyte *)calloc(resolution.w * resolution.h, 3 * sizeof(GLubyte));
     hyperion_client("webos", _address, _port, 150);
     signal(SIGINT, handle_signal);
+    printf("Start connection loop\n");
     while (!app_quit)
     {
         if (hyperion_read() < 0)
@@ -254,7 +255,7 @@ int capture_initialize()
     }
 
     fprintf(stdout, "[VT] VT_CreateVideoWindow\n");
-    window_id = VT_CreateVideoWindow(0);
+    VT_VIDEO_WINDOW_ID window_id = VT_CreateVideoWindow(0);
     if (window_id == -1)
     {
         fprintf(stderr, "[VT] VT_CreateVideoWindow Failed\n");
