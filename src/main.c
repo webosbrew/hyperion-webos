@@ -130,19 +130,19 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
-    if ((ret = backend._capture_preinit(&config)) != 0)
+    if ((ret = backend.capture_preinit(&config)) != 0)
     {
         fprintf(stderr, "Error! capture_preinit.\n");
         goto cleanup;
     }
 
-    if ((ret = backend._capture_init()) != 0)
+    if ((ret = backend.capture_init()) != 0)
     {
         fprintf(stderr, "Error! capture_initialize.\n");
         goto cleanup;
     }
 
-    if ((ret = backend._capture_start()) != 0)
+    if ((ret = backend.capture_start()) != 0)
     {
         fprintf(stderr, "Error! capture_start.\n");
         goto cleanup;
@@ -162,7 +162,17 @@ int main(int argc, char *argv[])
     ret = 0;
 cleanup:
     hyperion_destroy();
-    backend._capture_terminate();
-    backend._capture_cleanup();
+    backend.capture_terminate();
+    backend.capture_cleanup();
     return ret;
+}
+
+void image_data_cb(int width, int height, uint8_t *rgb_data)
+{
+    if (hyperion_set_image(rgb_data, width, height) != 0)
+    {
+        fprintf(stderr, "Write timeout\n");
+        hyperion_destroy();
+        app_quit = true;
+    }
 }

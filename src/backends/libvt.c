@@ -34,11 +34,11 @@ bool capture_initialized = false;
 bool vt_available = false;
 
 cap_backend_config_t config = {0, 0, 0, 0};
+cap_imagedata_callback_t imagedata_cb = NULL;
 VT_RESOLUTION_T resolution = {192, 108};
 
 void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data);
 void read_picture();
-void send_picture();
 
 void egl_init()
 {
@@ -278,7 +278,7 @@ void capture_frame()
             trace_end = getticks_us();
             dur_readframe += trace_end - trace_start;
             trace_start = trace_end;
-            send_picture();
+            imagedata_cb(config.resolution_width, config.resolution_height, pixels_rgb);
             trace_end = getticks_us();
             dur_sendframe += trace_end - trace_start;
             trace_start = trace_end;
@@ -365,16 +365,4 @@ void read_picture()
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void send_picture()
-{
-    int width = resolution.w, height = resolution.h;
-
-    if (hyperion_set_image(pixels_rgb, width, height) != 0)
-    {
-        fprintf(stderr, "Write timeout\n");
-        hyperion_destroy();
-        app_quit = true;
-    }
 }
