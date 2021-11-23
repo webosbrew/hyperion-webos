@@ -8,11 +8,18 @@
 #include <signal.h>
 
 #include <pthread.h>
+#include <dlfcn.h>
 
 #include "common.h"
 #include "hyperion_client.h"
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+
+#define DLSYM_ERROR_CHECK()                                         \
+    if ((error = dlerror()) != NULL)  {                             \
+        fprintf(stderr, "Error! dlsym failed, msg: %s\n", error);   \
+        return -2;                                                  \
+    }
 
 static struct option long_options[] = {
     {"width", optional_argument, 0, 'x'},
@@ -33,15 +40,34 @@ static cap_backend_funcs_t backend = {NULL};
 
 static int image_data_cb(int width, int height, uint8_t *rgb_data);
 
+static int import_backend_library(const char *library_filename) {
+    char *error;
+
+    void *handle = dlopen(library_filename, RTLD_LAZY);
+    if (handle == NULL) {
+        fprintf(stderr, "Error! Failed to load backend library: %s, error: %s\n", library_filename, dlerror());
+        return -1;
+    }
+
+    dlerror();    /* Clear any existing error */
+
+    backend.capture_preinit = dlsym(handle, "capture_preinit"); DLSYM_ERROR_CHECK();
+    backend.capture_init = dlsym(handle, "capture_init"); DLSYM_ERROR_CHECK();
+    backend.capture_start = dlsym(handle, "capture_start"); DLSYM_ERROR_CHECK();
+    backend.capture_terminate = dlsym(handle, "capture_terminate"); DLSYM_ERROR_CHECK();
+    backend.capture_cleanup = dlsym(handle, "capture_cleanup"); DLSYM_ERROR_CHECK();
+
+    return 0;
+}
+
 static int detect_backend() {
     /*
      * TODO
      * - Detect used rendering backend
-     * - dlopen particular capture backend
-     * - dlsym functions into cap_backend_funcs_t struct
+     * - Pass appropriate library name to "import_backend_library"
      */
 
-    return 0;
+    return import_backend_library("libvt_backend.so");
 }
 
 static void handle_signal(int signal)
