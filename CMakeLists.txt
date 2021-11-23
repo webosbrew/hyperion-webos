@@ -14,16 +14,18 @@ add_executable(hyperion-webos
     src/hyperion_client.c
  )
 target_include_directories(hyperion-webos PRIVATE fbs)
-target_link_libraries(hyperion-webos vt flatccrt pthread ${GLESv2_LIBRARIES} ${EGL_LIBRARIES})
+target_link_libraries(hyperion-webos flatccrt pthread)
 
 # Backends
 add_library(libvt_backend SHARED
     src/backends/libvt.c
 )
 
-target_include_directories(libvt_backend PRIVATE src/backends)
+target_include_directories(libvt_backend PRIVATE src src/backends)
+target_link_libraries(libvt_backend vt ${GLESv2_LIBRARIES} ${EGL_LIBRARIES})
 
 add_library(libvtcapture_backend SHARED
-    src/backends/libvtcapture.c)
+    src/backends/libvtcapture.c
+)
 
 target_include_directories(libvtcapture_backend PRIVATE src/backends)
