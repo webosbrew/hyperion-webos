@@ -14,7 +14,7 @@ add_executable(hyperion-webos
     src/hyperion_client.c
  )
 target_include_directories(hyperion-webos PRIVATE fbs)
-target_link_libraries(hyperion-webos flatccrt pthread)
+target_link_libraries(hyperion-webos flatccrt pthread dl)
 
 # Backends
 add_library(libvt_backend SHARED
