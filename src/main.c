@@ -13,6 +13,7 @@
 #include <EGL/egl.h>
 #include <vt/vt_openapi.h>
 
+#include "common.h"
 #include "debug.h"
 #include "hyperion_client.h"
 

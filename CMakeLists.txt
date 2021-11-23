@@ -10,8 +10,20 @@ pkg_check_modules(EGL egl REQUIRED)
 pkg_check_modules(GLESv2 glesv2 REQUIRED)
 
 add_executable(hyperion-webos
-    src/capture.c
+    src/main.c
     src/hyperion_client.c
  )
 target_include_directories(hyperion-webos PRIVATE fbs)
 target_link_libraries(hyperion-webos vt flatccrt pthread ${GLESv2_LIBRARIES} ${EGL_LIBRARIES})
+
+# Backends
+add_library(libvt_backend SHARED
+    src/backends/libvt.c
+)
+
+target_include_directories(libvt_backend PRIVATE src/backends)
+
+add_library(libvtcapture_backend SHARED
+    src/backends/libvtcapture.c)
+
+target_include_directories(libvtcapture_backend PRIVATE src/backends)
