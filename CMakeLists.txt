@@ -17,17 +17,17 @@ target_include_directories(hyperion-webos PRIVATE fbs)
 target_link_libraries(hyperion-webos flatccrt pthread dl)
 
 # Backends
-add_library(libvt_backend SHARED
+add_library(vt_backend SHARED
     src/backends/libvt.c
 )
 
-target_compile_definitions(libvt_backend PRIVATE CAPTURE_BACKEND)
-target_include_directories(libvt_backend PRIVATE src src/backends)
-target_link_libraries(libvt_backend vt ${GLESv2_LIBRARIES} ${EGL_LIBRARIES})
+target_compile_definitions(vt_backend PRIVATE CAPTURE_BACKEND)
+target_include_directories(vt_backend PRIVATE src src/backends)
+target_link_libraries(vt_backend vt ${GLESv2_LIBRARIES} ${EGL_LIBRARIES})
 
-add_library(libvtcapture_backend SHARED
+add_library(vtcapture_backend SHARED
     src/backends/libvtcapture.c
 )
 
-target_compile_definitions(libvtcapture_backend PRIVATE CAPTURE_BACKEND)
-target_include_directories(libvtcapture_backend PRIVATE src src/backends)
+target_compile_definitions(vtcapture_backend PRIVATE CAPTURE_BACKEND)
+target_include_directories(vtcapture_backend PRIVATE src src/backends)
