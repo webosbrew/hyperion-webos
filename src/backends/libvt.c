@@ -120,7 +120,7 @@ void egl_cleanup()
     free(pixels_rgba);
 }
 
-int capture_preinit(cap_backend_config_t *backend_config)
+int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback_t imagedata_cb)
 {
     memcpy(&config, backend_config, sizeof(cap_backend_config_t));
 

@@ -31,6 +31,8 @@ static int _port = 19400;
 static cap_backend_config_t config = {15, 0, 192, 108};
 static cap_backend_funcs_t backend = {NULL};
 
+static int image_data_cb(int width, int height, uint8_t *rgb_data);
+
 static int detect_backend() {
     /*
      * TODO
@@ -130,7 +132,7 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
-    if ((ret = backend.capture_preinit(&config)) != 0)
+    if ((ret = backend.capture_preinit(&config, &image_data_cb)) != 0)
     {
         fprintf(stderr, "Error! capture_preinit.\n");
         goto cleanup;
@@ -167,7 +169,7 @@ cleanup:
     return ret;
 }
 
-void image_data_cb(int width, int height, uint8_t *rgb_data)
+static int image_data_cb(int width, int height, uint8_t *rgb_data)
 {
     if (hyperion_set_image(rgb_data, width, height) != 0)
     {
