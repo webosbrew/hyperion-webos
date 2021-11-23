@@ -10,6 +10,14 @@ typedef struct _cap_backend_config {
     int resolution_height;
 } cap_backend_config_t;
 
+#if defined(CAPTURE_BACKEND)
+    extern int capture_preinit(cap_backend_config_t*);
+    extern int capture_init();
+    extern int capture_start();
+    extern int capture_terminate();
+    extern int capture_cleanup();
+#endif
+
 /*
  * Function pointers for usage by dlopen @ main.c
  */

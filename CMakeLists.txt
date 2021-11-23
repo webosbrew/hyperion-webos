@@ -21,6 +21,7 @@ add_library(libvt_backend SHARED
     src/backends/libvt.c
 )
 
+target_compile_definitions(libvt_backend PRIVATE CAPTURE_BACKEND)
 target_include_directories(libvt_backend PRIVATE src src/backends)
 target_link_libraries(libvt_backend vt ${GLESv2_LIBRARIES} ${EGL_LIBRARIES})
 
@@ -28,4 +29,5 @@ add_library(libvtcapture_backend SHARED
     src/backends/libvtcapture.c
 )
 
-target_include_directories(libvtcapture_backend PRIVATE src/backends)
+target_compile_definitions(libvtcapture_backend PRIVATE CAPTURE_BACKEND)
+target_include_directories(libvtcapture_backend PRIVATE src src/backends)

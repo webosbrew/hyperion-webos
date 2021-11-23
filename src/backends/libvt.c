@@ -15,7 +15,7 @@
 #include <vt/vt_openapi.h>
 
 #include "gl_debug.h"
-#include "backend.h"
+#include "common.h"
 
 EGLDisplay egl_display;
 EGLContext egl_context;
