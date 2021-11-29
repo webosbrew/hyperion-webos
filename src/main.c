@@ -176,7 +176,11 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
-    hyperion_client("webos", _address, _port, 150);
+    if ((ret = hyperion_client("webos", _address, _port, 150)) != 0)
+    {
+        fprintf(stderr, "Error! hyperion_client.\n");
+        goto cleanup;
+    }
     signal(SIGINT, handle_signal);
     printf("Start connection loop\n");
     while (!app_quit)
