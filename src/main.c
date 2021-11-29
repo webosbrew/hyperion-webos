@@ -69,7 +69,7 @@ static int detect_backend() {
      * - Pass appropriate library name to "import_backend_library"
      */
 
-    return import_backend_library("libvt_backend.so");
+    return import_backend_library("libdile_vt_backend.so");
 }
 
 static void handle_signal(int signal)
@@ -204,8 +204,10 @@ int main(int argc, char *argv[])
     ret = 0;
 cleanup:
     hyperion_destroy();
-    backend.capture_terminate();
-    backend.capture_cleanup();
+    if (backend.capture_terminate) {
+        backend.capture_terminate();
+        backend.capture_cleanup();
+    }
     return ret;
 }
 
