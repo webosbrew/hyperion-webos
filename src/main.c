@@ -27,6 +27,8 @@ static struct option long_options[] = {
     {"address", required_argument, 0, 'a'},
     {"port", optional_argument, 0, 'p'},
     {"fps", optional_argument, 0, 'f'},
+    {"no-video", optional_argument, 0, 'V'},
+    {"no-gui", optional_argument, 0, 'G'},
     {0, 0, 0, 0},
 };
 
@@ -94,6 +96,8 @@ static void print_usage()
     printf("  -a, --address         IP address of Hyperion server\n");
     printf("  -p, --port            Port of Hyperion flatbuffers server (default 19400)\n");
     printf("  -f, --fps             Framerate for sending video frames (default 15)\n");
+    printf("  -V, --no-video        Video will not be captured\n");
+    printf("  -G, --no-gui          GUI/UI will not be captured\n");
 }
 
 static int parse_options(int argc, char *argv[])
@@ -117,6 +121,12 @@ static int parse_options(int argc, char *argv[])
             break;
         case 'f':
             config.fps = atoi(optarg);
+            break;
+        case 'V':
+            config.no_video = 1;
+            break;
+        case 'G':
+            config.no_gui = 1;
             break;
         }
     }

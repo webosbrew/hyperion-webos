@@ -17,6 +17,8 @@ typedef struct _cap_backend_config {
     int framedelay_us;
     int resolution_width;
     int resolution_height;
+    bool no_video;
+    bool no_gui;
 } cap_backend_config_t;
 
 #if defined(CAPTURE_BACKEND)
