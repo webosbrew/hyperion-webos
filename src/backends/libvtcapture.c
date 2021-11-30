@@ -83,6 +83,17 @@ cap_imagedata_callback_t imagedata_cb = NULL;
 
 // Prototypes
 int vtcapture_initialize();
+int capture_stop();
+int capture_stop_hal();
+int capture_stop_vt();
+int capture_cleanup();
+uint64_t getticks_us();
+void capture_frame();
+void send_picture();
+int blend(unsigned char *result, unsigned char *fg, unsigned char *bg, int leng);
+int remalpha(unsigned char *result, unsigned char *rgba, int leng);
+void NV21_TO_RGBA(unsigned char *yuyv, unsigned char *rgba, int width, int height);
+void NV21_TO_RGB24(unsigned char *yuyv, unsigned char *rgb, int width, int height);
 
 int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback_t callback){
     memcpy(&config, backend_config, sizeof(cap_backend_config_t));
@@ -119,7 +130,7 @@ int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback
 
 int capture_init()
 {
-    if(_nogui != 1){
+    if(config.no_gui != 1){
         fprintf(stderr, "Init graphical capture..\n");
 
         if ((done = HAL_GAL_Init()) != 0) {
@@ -159,7 +170,7 @@ int capture_init()
         fprintf(stderr, "Halgal done!\n");
     }
 
-    if(_novideo != 1){
+    if(config.no_video != 1){
         fprintf(stderr, "Init video capture..\n");
         driver = vtCapture_create();
         fprintf(stderr, "Driver created!\n");
@@ -174,7 +185,7 @@ int capture_init()
         }
     }
 
-    if(_novideo != 1 && _nogui != 1) //Both
+    if(config.no_video != 1 && config.no_gui != 1) //Both
     {
         comsize = size0+size1; 
         combined = (char *) malloc(comsize);
@@ -193,7 +204,7 @@ int capture_init()
 
         addr = (char *) mmap(0, len, 3, 1, fd, surfaceInfo.offset);
     }
-    else if (_novideo != 1 && _nogui == 1) //Video only
+    else if (config.no_video != 1 && config.no_gui == 1) //Video only
     {
         comsize = size0+size1; 
         combined = (char *) malloc(comsize);
@@ -203,7 +214,7 @@ int capture_init()
         rgb = (char *) malloc(rgbsize);
         rgbaout = (char *) malloc(rgbasize);
     }
-    else if (_nogui != 1 && _novideo == 1) //GUI only
+    else if (config.no_gui != 1 && config.no_video == 1) //GUI only
     {
         stride = surfaceInfo.pitch/4;
 
@@ -219,16 +230,16 @@ int capture_init()
 }
 
 
-void capture_stop()
+int capture_stop()
 {
     fprintf(stderr, "-- Quit called! --\n");
 
     int done;
     if(isrunning == 1){
-        if(_novideo != 1){ 
+        if(config.no_video != 1){ 
             free(combined);
         }
-        if(_nogui != 1){
+        if(config.no_gui != 1){
             munmap(addr, len);
             done = close(fd);
             if (done != 0){
@@ -237,7 +248,7 @@ void capture_stop()
                 fprintf(stderr, "gfx close ok result: %d\n", done);
             }
         }
-        if(_nogui != 1 && _novideo != 1){
+        if(config.no_gui != 1 && config.no_video != 1){
             free(rgb2);
         }
         free(rgbaout);
@@ -245,13 +256,13 @@ void capture_stop()
         free(gesamt);
     }
     done = 0;
-    if(_novideo != 1){
+    if(config.no_video != 1){
         done += capture_stop_vt();
     }
-    if(_nogui != 1){
+    if(config.no_gui != 1){
         done += capture_stop_hal();
     }
-    return;
+    return done;
 }
 
 int capture_stop_hal()
@@ -284,7 +295,7 @@ int capture_stop_vt()
     return done;
 }
 
-void capture_terminate()
+int capture_terminate()
 {
     int done;
     done = vtCapture_postprocess(driver, client);
@@ -297,14 +308,14 @@ void capture_terminate()
                 fprintf(stderr, "Quitting: Driver released!\n");
                 memset(&client,0,127);
                 fprintf(stderr, "Quitting!\n");
-                return;
+                return 0;
             }
             fprintf(stderr, "Quitting: vtCapture_finalize failed: %x\n", done);
         }
     vtCapture_finalize(driver, client);
     vtCapture_release(driver);
     fprintf(stderr, "Quitting with errors: %x!\n", done);
-    return;
+    return -1;
 }
 
 uint64_t getticks_us()
@@ -327,12 +338,12 @@ void capture_frame()
     uint64_t ticks = getticks_us();
     last_ticks = ticks;
 
-    if(_novideo != 1 && vtcapture_initialized){
+    if(config.no_video != 1 && vtcapture_initialized){
         memcpy(combined, addr0, size0);
         memcpy(combined+size0, addr1, size1);
     }
 
-    if(_nogui != 1){
+    if(config.no_gui != 1){
         if ((indone = HAL_GAL_CaptureFrameBuffer(&surfaceInfo)) != 0) {
             fprintf(stderr, "HAL_GAL_CaptureFrameBuffer failed: %x\n", indone);
             capture_stop();
@@ -340,20 +351,20 @@ void capture_frame()
         }
         memcpy(hal,addr,len);
     }
-    if(_novideo != 1 && _nogui != 1 && vtcapture_initialized) //Both
+    if(config.no_video != 1 && config.no_gui != 1 && vtcapture_initialized) //Both
     {
         NV21_TO_RGBA(combined, rgbaout, stride, h);
         blend(gesamt, hal, rgbaout, len);
         remalpha(rgb, gesamt, len);
     }
-    else if(_novideo != 1 && _nogui != 1 && !vtcapture_initialized){ //Both, but vt not ready
+    else if(config.no_video != 1 && config.no_gui != 1 && !vtcapture_initialized){ //Both, but vt not ready
         remalpha(rgb2, hal, len);
     }
-    else if (_novideo != 1 && _nogui == 1 && vtcapture_initialized) //Video only
+    else if (config.no_video != 1 && config.no_gui == 1 && vtcapture_initialized) //Video only
     {
         NV21_TO_RGB24(combined, rgb, stride, h);
     }
-    else if (_nogui != 1 && _novideo == 1) //GUI only
+    else if (config.no_gui != 1 && config.no_video == 1) //GUI only
     {
         remalpha(rgb, hal, len);
     }
@@ -377,7 +388,7 @@ void capture_frame()
 void send_picture()
 {
 //    fprintf(stderr, "[Client] hyperion_set_image\n");
-    if (vtcapture_initialized || (_novideo == 1 && _nogui != 1)){
+    if (vtcapture_initialized || (config.no_video == 1 && config.no_gui != 1)){
         if (hyperion_set_image(rgb, stride, resolution.h) != 0)
         {
             fprintf(stderr, "Write timeout\n");
@@ -391,7 +402,7 @@ void send_picture()
             hyperion_destroy();
             app_quit = true;
         }
-         if (_novideo != 1 && vtfrmcnt > 200){
+         if (config.no_video != 1 && vtfrmcnt > 200){
             vtfrmcnt = 0;
             fprintf(stderr, "Try to init vtcapture again..\n");
             if (vtcapture_initialize() == 0){
