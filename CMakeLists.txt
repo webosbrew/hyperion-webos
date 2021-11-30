@@ -31,3 +31,4 @@ add_library(vtcapture_backend SHARED
 
 target_compile_definitions(vtcapture_backend PRIVATE CAPTURE_BACKEND)
 target_include_directories(vtcapture_backend PRIVATE src src/backends)
+target_link_libraries(vtcapture_backend vtcapture halgal)
