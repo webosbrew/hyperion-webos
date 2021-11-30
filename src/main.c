@@ -29,11 +29,14 @@ static struct option long_options[] = {
     {"fps", optional_argument, 0, 'f'},
     {"no-video", optional_argument, 0, 'V'},
     {"no-gui", optional_argument, 0, 'G'},
+    {"backend", optional_argument, 0, 'b'},
+    {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0},
 };
 
 bool app_quit = false;
 
+static const char *_backend = NULL;
 static const char *_address = NULL;
 static int _port = 19400;
 
@@ -69,6 +72,12 @@ static int detect_backend() {
      * - Pass appropriate library name to "import_backend_library"
      */
 
+    if (_backend != NULL) {
+        char library_name[256];
+        snprintf(library_name, sizeof(library_name), "%s_backend.so", _backend);
+        return import_backend_library(library_name);
+    }
+
     return import_backend_library("libdile_vt_backend.so");
 }
 
@@ -98,12 +107,13 @@ static void print_usage()
     printf("  -f, --fps             Framerate for sending video frames (default 15)\n");
     printf("  -V, --no-video        Video will not be captured\n");
     printf("  -G, --no-gui          GUI/UI will not be captured\n");
+    printf("  -b, --backend         Use specific backend (default auto)\n");
 }
 
 static int parse_options(int argc, char *argv[])
 {
     int opt, longindex;
-    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:", long_options, &longindex)) != -1)
+    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:h", long_options, &longindex)) != -1)
     {
         switch (opt)
         {
@@ -128,6 +138,12 @@ static int parse_options(int argc, char *argv[])
         case 'G':
             config.no_gui = 1;
             break;
+        case 'b':
+            _backend = strdup(optarg);
+            break;
+        case 'h':
+            print_usage();
+            return 1;
         }
     }
     if (!_address)
@@ -206,6 +222,8 @@ cleanup:
     hyperion_destroy();
     if (backend.capture_terminate) {
         backend.capture_terminate();
+    }
+    if (backend.capture_cleanup) {
         backend.capture_cleanup();
     }
     return ret;
