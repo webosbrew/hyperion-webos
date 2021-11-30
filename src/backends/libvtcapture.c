@@ -389,20 +389,12 @@ void send_picture()
 {
 //    fprintf(stderr, "[Client] hyperion_set_image\n");
     if (vtcapture_initialized || (config.no_video == 1 && config.no_gui != 1)){
-        if (hyperion_set_image(rgb, stride, resolution.h) != 0)
-        {
-            fprintf(stderr, "Write timeout\n");
-            hyperion_destroy();
-            app_quit = true;
-        }
+        imagedata_cb(stride, resolution.h, rgb);
     } else {
-        if (hyperion_set_image(rgb2, stride2, resolution.h) != 0)
-        {
-            fprintf(stderr, "Write timeout\n");
-            hyperion_destroy();
-            app_quit = true;
-        }
-         if (config.no_video != 1 && vtfrmcnt > 200){
+        imagedata_cb(stride2, resolution.h, rgb2);
+        /*
+        TODO: Integrate the following routine
+        if (config.no_video != 1 && vtfrmcnt > 200){
             vtfrmcnt = 0;
             fprintf(stderr, "Try to init vtcapture again..\n");
             if (vtcapture_initialize() == 0){
@@ -413,6 +405,7 @@ void send_picture()
             }
         }
         vtfrmcnt++;
+        */
     }
 }
 
