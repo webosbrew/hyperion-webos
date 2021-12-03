@@ -17,6 +17,7 @@
 #include "common.h"
 
 pthread_mutex_t frame_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_t capture_thread;
 
 //Halgal
 HAL_GAL_SURFACE surfaceInfo;
@@ -34,6 +35,7 @@ VT_CLIENTID_T client[128] = "00";
 bool capture_initialized = false;
 bool vtcapture_initialized = false;
 bool restart = false;
+bool capture_run = false;
 int vtfrmcnt = 0;
 int isrunning = 0;
 int done = 0;
@@ -83,6 +85,7 @@ cap_imagedata_callback_t imagedata_cb = NULL;
 
 // Prototypes
 int vtcapture_initialize();
+int capture_start();
 int capture_stop();
 int capture_stop_hal();
 int capture_stop_vt();
@@ -94,6 +97,7 @@ int blend(unsigned char *result, unsigned char *fg, unsigned char *bg, int leng)
 int remalpha(unsigned char *result, unsigned char *rgba, int leng);
 void NV21_TO_RGBA(unsigned char *yuyv, unsigned char *rgba, int width, int height);
 void NV21_TO_RGB24(unsigned char *yuyv, unsigned char *rgb, int width, int height);
+void *capture_thread_target(void *data);
 
 int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback_t callback){
     memcpy(&config, backend_config, sizeof(cap_backend_config_t));
@@ -175,14 +179,14 @@ int capture_init()
         driver = vtCapture_create();
         fprintf(stderr, "Driver created!\n");
 
-        done = vtcapture_initialize();
+         done = vtcapture_initialize();
         if (done == -1){
             return -1;
         }else if (done == 17){
             vtcapture_initialized = false;
         }else if (done == 0){
             vtcapture_initialized = true;
-        }
+        } 
     }
 
     if(config.no_video != 1 && config.no_gui != 1) //Both
@@ -229,10 +233,85 @@ int capture_init()
     return 0;
 }
 
+int vtcapture_initialize(){
+    int innerdone = 0;
+    innerdone = vtCapture_init(driver, caller, client);
+        if (innerdone == 17) {
+            fprintf(stderr, "vtCapture_init not ready yet return: %d\n", innerdone);
+            return 17;
+        }else if (innerdone !=0){
+            fprintf(stderr, "vtCapture_init failed: %d\nQuitting...\n", innerdone);
+            return -1;
+        }
+        fprintf(stderr, "vtCapture_init done!\nCaller_ID: %s Client ID: %s \n", caller, client);
 
-int capture_stop()
+        innerdone = vtCapture_preprocess(driver, client, &props);
+        if (innerdone != 0) {
+            fprintf(stderr, "vtCapture_preprocess failed: %x\nQuitting...\n", innerdone);
+            return -1;
+        }
+        fprintf(stderr, "vtCapture_preprocess done!\n");
+
+        innerdone = vtCapture_planeInfo(driver, client, &plane);
+        if (innerdone == 0 ) {
+            stride = plane.stride;
+
+            region = plane.planeregion;
+            x = region.a, y = region.b, w = region.c, h = region.d;
+
+            activeregion = plane.activeregion;
+            xa = activeregion.a, ya = activeregion.b, wa = activeregion.c, ha = activeregion.d;
+        }else{
+            fprintf(stderr, "vtCapture_planeInfo failed: %x\nQuitting...\n", innerdone);
+            return -1;
+        }
+        fprintf(stderr, "vtCapture_planeInfo done!\nstride: %d\nRegion: x: %d, y: %d, w: %d, h: %d\nActive Region: x: %d, y: %d w: %d h: %d\n", stride, x, y, w, h, xa, ya, wa, ha);
+
+        innerdone = vtCapture_process(driver, client);
+        if (innerdone == 0){
+            isrunning = 1;
+            capture_initialized = true;
+        }else{
+            isrunning = 0;
+            fprintf(stderr, "vtCapture_process failed: %x\nQuitting...\n", innerdone);
+            return -1;
+        }
+        fprintf(stderr, "vtCapture_process done!\n");
+
+        int cnter = 0;
+        do{
+            sleep(1/1000*100);
+            innerdone = vtCapture_currentCaptureBuffInfo(driver, &buff);
+            if (innerdone == 0 ) {
+                addr0 = buff.start_addr0;
+                addr1 = buff.start_addr1;
+                size0 = buff.size0;
+                size1 = buff.size1;
+            }else if (innerdone != 2){
+                fprintf(stderr, "vtCapture_currentCaptureBuffInfo failed: %x\nQuitting...\n", innerdone);
+                capture_stop();
+                return -1;
+            }
+            cnter++;
+        }while(innerdone != 0);
+        fprintf(stderr, "vtCapture_currentCaptureBuffInfo done after %d tries!\naddr0: %p addr1: %p size0: %d size1: %d\n", cnter, addr0, addr1, size0, size1);
+
+        return 0;
+}
+
+int capture_start(){
+    capture_run = true;
+    if (pthread_create(&capture_thread, NULL, capture_thread_target, NULL) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+int capture_terminate()
 {
     fprintf(stderr, "-- Quit called! --\n");
+    capture_run = false;
+    pthread_join(capture_thread, NULL);
 
     int done;
     if(isrunning == 1){
@@ -287,15 +366,15 @@ int capture_stop_vt()
     if (done != 0)
     {
         fprintf(stderr, "vtCapture_stop failed: %x\nQuitting...\n", done);
-        capture_terminate();
+//        capture_terminate();
         return done;
     }
     fprintf(stderr, "vtCapture_stop done!\n");
-    capture_terminate();
+//    capture_terminate();
     return done;
 }
 
-int capture_terminate()
+int capture_cleanup()
 {
     int done;
     done = vtCapture_postprocess(driver, client);
@@ -392,20 +471,26 @@ void send_picture()
         imagedata_cb(stride, resolution.h, rgb);
     } else {
         imagedata_cb(stride2, resolution.h, rgb2);
-        /*
-        TODO: Integrate the following routine
+
         if (config.no_video != 1 && vtfrmcnt > 200){
             vtfrmcnt = 0;
             fprintf(stderr, "Try to init vtcapture again..\n");
             if (vtcapture_initialize() == 0){
-                fprintf(stderr, "Init possible. Cleanup and reset..\n");
-                restart = true;
-                app_quit = true;
+                fprintf(stderr, "Init possible. Need to implement cleanup and reset, skipping..\n");
+                //TODO: Implement cleanup and restart of vtcapture
+                //restart = true;
+                //app_quit = true;
                 vtcapture_initialized = false;
+                vtfrmcnt = 0;
             }
         }
         vtfrmcnt++;
-        */
+    }
+}
+
+void* capture_thread_target(void* data) {
+    while (capture_run) {
+        capture_frame();
     }
 }
 
