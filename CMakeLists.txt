@@ -32,3 +32,16 @@ add_library(vtcapture_backend SHARED
 target_compile_definitions(vtcapture_backend PRIVATE CAPTURE_BACKEND)
 target_include_directories(vtcapture_backend PRIVATE src src/backends)
 target_link_libraries(vtcapture_backend vtcapture halgal)
+
+add_library(dile_vt_backend SHARED
+    src/backends/libdile_vt.c
+)
+
+target_compile_definitions(dile_vt_backend PRIVATE CAPTURE_BACKEND)
+target_include_directories(dile_vt_backend PRIVATE src src/backends)
+target_link_libraries(dile_vt_backend dile_vt)
+
+# libdile_vt.so seems to be missing DT_NEEDED for libPmLogLib.so.3 - let's just
+# add it over to our library. For some reason adding PmLogLib loaded via
+# pkgconfig to target_link_libraries doesn't work...
+set_target_properties(dile_vt_backend PROPERTIES LINK_FLAGS "-lPmLogLib")

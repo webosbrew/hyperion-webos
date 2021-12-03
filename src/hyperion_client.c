@@ -185,11 +185,7 @@ bool _parse_reply(hyperionnet_Reply_table_t reply)
         }
 
         // We got a registered reply.
-        if (registered == -1 || registered != _priority)
-        {
-            _registered = false;
-        }
-        else
+        if (registered == _priority)
         {
             _registered = true;
         }
