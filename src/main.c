@@ -22,14 +22,14 @@
     }
 
 static struct option long_options[] = {
-    {"width", optional_argument, 0, 'x'},
-    {"height", optional_argument, 0, 'y'},
+    {"width", required_argument, 0, 'x'},
+    {"height", required_argument, 0, 'y'},
     {"address", required_argument, 0, 'a'},
-    {"port", optional_argument, 0, 'p'},
-    {"fps", optional_argument, 0, 'f'},
-    {"no-video", optional_argument, 0, 'V'},
-    {"no-gui", optional_argument, 0, 'G'},
-    {"backend", optional_argument, 0, 'b'},
+    {"port", required_argument, 0, 'p'},
+    {"fps", required_argument, 0, 'f'},
+    {"no-video", no_argument, 0, 'V'},
+    {"no-gui", no_argument, 0, 'G'},
+    {"backend", required_argument, 0, 'b'},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0},
 };
@@ -100,14 +100,14 @@ static void print_usage()
     printf("\n");
     printf("Grab screen content continously and send to Hyperion via flatbuffers server.\n");
     printf("\n");
-    printf("  -x, --width           Width of video frame (default 192)\n");
-    printf("  -y, --height          Height of video frame (default 108)\n");
-    printf("  -a, --address         IP address of Hyperion server\n");
-    printf("  -p, --port            Port of Hyperion flatbuffers server (default 19400)\n");
-    printf("  -f, --fps             Framerate for sending video frames (default 15)\n");
+    printf("  -x, --width=WIDTH     Width of video frame (default 192)\n");
+    printf("  -y, --height=HEIGHT   Height of video frame (default 108)\n");
+    printf("  -a, --address=ADDR    IP address of Hyperion server\n");
+    printf("  -p, --port=PORT       Port of Hyperion flatbuffers server (default 19400)\n");
+    printf("  -f, --fps=FPS         Framerate for sending video frames (default 15)\n");
+    printf("  -b, --backend=BE      Use specific backend (default auto)\n");
     printf("  -V, --no-video        Video will not be captured\n");
     printf("  -G, --no-gui          GUI/UI will not be captured\n");
-    printf("  -b, --backend         Use specific backend (default auto)\n");
 }
 
 static int parse_options(int argc, char *argv[])
@@ -142,6 +142,7 @@ static int parse_options(int argc, char *argv[])
             _backend = strdup(optarg);
             break;
         case 'h':
+        default:
             print_usage();
             return 1;
         }
