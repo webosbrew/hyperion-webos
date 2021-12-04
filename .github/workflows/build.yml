@@ -38,6 +38,9 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
-        name: hyperion_webos_binary
+        name: hyperion_webos
         path: |
           ${{github.workspace}}/build/hyperion-webos
+          ${{github.workspace}}/build/libdile_vt_backend.so
+          ${{github.workspace}}/build/libvt_backend.so
+          ${{github.workspace}}/build/libvtcapture_backend.so
