@@ -59,10 +59,12 @@ int capture_terminate() {
     }
     return 0;
 }
+
 int capture_cleanup() {
     DILE_VT_Destroy(vth);
     return 0;
 }
+
 int capture_start()
 {
     vth = DILE_VT_Create(0);
@@ -84,10 +86,11 @@ int capture_start()
     output_state.freezed = 0;
     output_state.appliedPQ = 0;
 
-    // I think we should probably find a better way of handling framerate
-    // division/counting. By default, divider of 1 will keep capture at around
-    // 45fps with default resolution.
-    output_state.framerate = 45 / config.fps;
+    // Framerate provided by libdile_vt is dependent on content currently played
+    // (50/60fps). We don't have any better way of limiting FPS, so let's just
+    // average it out - if someone sets their preferred framerate to 30 and
+    // content was 50fps, we'll just end up feeding 25 frames per second.
+    output_state.framerate = config.fps == 0 ? 1 : 60 / config.fps;
     fprintf(stderr, "[DILE_VT] framerate divider: %d\n", output_state.framerate);
 
     // Set framerate divider
