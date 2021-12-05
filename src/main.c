@@ -6,12 +6,23 @@
 #include <getopt.h>
 #include <time.h>
 #include <signal.h>
-
 #include <pthread.h>
 #include <dlfcn.h>
-
 #include "common.h"
 #include "hyperion_client.h"
+#include <glib.h>
+#include <glib-object.h>
+#include <lunaservice.h>
+#include <luna-service2/lunaservice.h>
+#include <pbnjson.h>
+#include <PmLogLib.h>
+
+#define SERVICE_NAME "org.webosbrew.piccap.service"
+#define BUF_SIZE 64
+
+
+PmLogContext logcontext;
+
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
@@ -34,6 +45,23 @@ static struct option long_options[] = {
     {0, 0, 0, 0},
 };
 
+// Main loop for aliving background service
+GMainLoop *gmainLoop;
+
+LSHandle  *sh = NULL;
+LSMessage *message;
+// Declare of each method
+bool start(LSHandle *sh, LSMessage *message, void *data);
+bool stop(LSHandle *sh, LSMessage *message, void *data);
+bool status(LSHandle *sh, LSMessage *message, void *data);
+
+LSMethod sampleMethods[] = {
+    {"start", start},
+    {"stop", stop},
+    {"status", status},   // luna://org.webosbrew.piccap.service/test
+};
+
+
 bool app_quit = false;
 
 static const char *_backend = NULL;
@@ -44,6 +72,7 @@ static cap_backend_config_t config = {15, 0, 192, 108};
 static cap_backend_funcs_t backend = {NULL};
 
 static int image_data_cb(int width, int height, uint8_t *rgb_data);
+int capture_main(int argc, char *argv[]);
 
 static int import_backend_library(const char *library_filename) {
     char *error;
@@ -168,6 +197,38 @@ static int parse_options(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+    PmLogGetContext("hyperion-webos_service", &logcontext);
+//    PmLogMsg(logcontext,Info, "MAINFNC", 0,  PMLOGKS("APP_STATUS","deleted"));
+//    PmLogInfo(logcontext, "MAINFNC", 0,  "Teeeest!");
+    LSError lserror;
+    LSHandle  *handle = NULL;
+    bool bRetVal = FALSE;
+
+    LSErrorInit(&lserror);
+
+    // create a GMainLoop
+    gmainLoop = g_main_loop_new(NULL, FALSE);
+
+    bRetVal = LSRegister(SERVICE_NAME, &handle, &lserror);
+    if (FALSE== bRetVal) {
+        LSErrorFree( &lserror );
+        return 0;
+    }
+    sh = LSMessageGetConnection(message);
+
+    LSRegisterCategory(handle,"/",sampleMethods, NULL, NULL, &lserror);
+
+    LSGmainAttach(handle, gmainLoop, &lserror);
+
+    // run to check continuously for new events from each of the event sources
+    g_main_loop_run(gmainLoop);
+    // Decreases the reference count on a GMainLoop object by one
+    g_main_loop_unref(gmainLoop);
+
+    return 0;
+}
+
+int capture_main(int argc, char *argv[]){
     int ret;
     if ((ret = parse_options(argc, argv)) != 0)
     {
@@ -238,4 +299,231 @@ static int image_data_cb(int width, int height, uint8_t *rgb_data)
         hyperion_destroy();
         app_quit = true;
     }
+}
+
+
+bool start(LSHandle *sh, LSMessage *message, void *data)
+{
+    LSError lserror;
+    JSchemaInfo schemaInfo;
+    jvalue_ref parsed = {0}, value = {0};
+    jvalue_ref jobj = {0}, jreturnValue = {0};
+    const char *address = NULL;
+    const char *port = NULL;
+    const char *width = NULL;
+    const char *height = NULL;
+    const char *fps = NULL;
+    const char *backend = NULL;
+    const char *novideo = NULL;
+    const char *nogui = NULL;
+    char buf[BUF_SIZE] = {0, };
+
+    LSErrorInit(&lserror);
+
+    // Initialize schema
+    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
+
+    // get message from LS2 and parsing to make object
+    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(message)), DOMOPT_NOOPT, &schemaInfo);
+
+    if (jis_null(parsed)) {
+        j_release(&parsed);
+        return true;
+    }
+
+    // Get value from payload.input and JSON Object to string without schema validation check
+    value = jobject_get(parsed, j_cstr_to_buffer("address"));
+    address = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("port"));
+    port = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("width"));
+    width = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("height"));
+    height = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("fps"));
+    fps = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("backend"));
+    backend = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("novideo"));
+    novideo = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("nogui"));
+    nogui = jvalue_tostring_simple(value);
+
+    PmLogInfo(logcontext, "STARTFNC", 0, "Address: %s", address);
+
+
+    /**
+     * JSON create test
+     */
+    jobj = jobject_create();
+    if (jis_null(jobj)) {
+        j_release(&jobj);
+        return true;
+    }
+    
+    jreturnValue = jboolean_create(TRUE);
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
+    jobject_set(jobj, j_cstr_to_buffer("address"), jstring_create(address));
+    jobject_set(jobj, j_cstr_to_buffer("port"), jstring_create(port));
+    jobject_set(jobj, j_cstr_to_buffer("width"), jstring_create(width));
+    jobject_set(jobj, j_cstr_to_buffer("height"), jstring_create(height));
+    jobject_set(jobj, j_cstr_to_buffer("fps"), jstring_create(fps));
+    jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(backend));
+    jobject_set(jobj, j_cstr_to_buffer("novideo"), jstring_create(novideo));
+    jobject_set(jobj, j_cstr_to_buffer("nogui"), jstring_create(nogui));
+
+    LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
+
+    j_release(&parsed);
+    return true;
+}
+
+bool stop(LSHandle *sh, LSMessage *message, void *data)
+{
+    LSError lserror;
+    JSchemaInfo schemaInfo;
+    jvalue_ref parsed = {0}, value = {0};
+    jvalue_ref jobj = {0}, jreturnValue = {0};
+    const char *address = NULL;
+    const char *port = NULL;
+    const char *width = NULL;
+    const char *height = NULL;
+    const char *fps = NULL;
+    const char *backend = NULL;
+    const char *novideo = NULL;
+    const char *nogui = NULL;
+    char buf[BUF_SIZE] = {0, };
+
+    LSErrorInit(&lserror);
+
+    // Initialize schema
+    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
+
+    // get message from LS2 and parsing to make object
+    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(message)), DOMOPT_NOOPT, &schemaInfo);
+
+    if (jis_null(parsed)) {
+        j_release(&parsed);
+        return true;
+    }
+
+    // Get value from payload.input and JSON Object to string without schema validation check
+    value = jobject_get(parsed, j_cstr_to_buffer("address"));
+    address = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("port"));
+    port = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("width"));
+    width = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("height"));
+    height = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("fps"));
+    fps = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("backend"));
+    backend = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("novideo"));
+    novideo = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("nogui"));
+    nogui = jvalue_tostring_simple(value);
+
+
+
+    /**
+     * JSON create test
+     */
+    jobj = jobject_create();
+    if (jis_null(jobj)) {
+        j_release(&jobj);
+        return true;
+    }
+    
+    jreturnValue = jboolean_create(TRUE);
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
+    jobject_set(jobj, j_cstr_to_buffer("address"), jstring_create(address));
+    jobject_set(jobj, j_cstr_to_buffer("port"), jstring_create(port));
+    jobject_set(jobj, j_cstr_to_buffer("width"), jstring_create(width));
+    jobject_set(jobj, j_cstr_to_buffer("height"), jstring_create(height));
+    jobject_set(jobj, j_cstr_to_buffer("fps"), jstring_create(fps));
+    jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(backend));
+    jobject_set(jobj, j_cstr_to_buffer("novideo"), jstring_create(novideo));
+    jobject_set(jobj, j_cstr_to_buffer("nogui"), jstring_create(nogui));
+
+    LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
+
+    j_release(&parsed);
+    return true;
+}
+
+bool status(LSHandle *sh, LSMessage *message, void *data)
+{
+    LSError lserror;
+    JSchemaInfo schemaInfo;
+    jvalue_ref parsed = {0}, value = {0};
+    jvalue_ref jobj = {0}, jreturnValue = {0};
+    const char *address = NULL;
+    const char *port = NULL;
+    const char *width = NULL;
+    const char *height = NULL;
+    const char *fps = NULL;
+    const char *backend = NULL;
+    const char *novideo = NULL;
+    const char *nogui = NULL;
+    char buf[BUF_SIZE] = {0, };
+
+    LSErrorInit(&lserror);
+
+    // Initialize schema
+    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
+
+    // get message from LS2 and parsing to make object
+    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(message)), DOMOPT_NOOPT, &schemaInfo);
+
+    if (jis_null(parsed)) {
+        j_release(&parsed);
+        return true;
+    }
+
+    // Get value from payload.input and JSON Object to string without schema validation check
+    value = jobject_get(parsed, j_cstr_to_buffer("address"));
+    address = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("port"));
+    port = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("width"));
+    width = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("height"));
+    height = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("fps"));
+    fps = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("backend"));
+    backend = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("novideo"));
+    novideo = jvalue_tostring_simple(value);
+    value = jobject_get(parsed, j_cstr_to_buffer("nogui"));
+    nogui = jvalue_tostring_simple(value);
+
+
+
+    /**
+     * JSON create test
+     */
+    jobj = jobject_create();
+    if (jis_null(jobj)) {
+        j_release(&jobj);
+        return true;
+    }
+    
+    jreturnValue = jboolean_create(TRUE);
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
+    jobject_set(jobj, j_cstr_to_buffer("address"), jstring_create(address));
+    jobject_set(jobj, j_cstr_to_buffer("port"), jstring_create(port));
+    jobject_set(jobj, j_cstr_to_buffer("width"), jstring_create(width));
+    jobject_set(jobj, j_cstr_to_buffer("height"), jstring_create(height));
+    jobject_set(jobj, j_cstr_to_buffer("fps"), jstring_create(fps));
+    jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(backend));
+    jobject_set(jobj, j_cstr_to_buffer("novideo"), jstring_create(novideo));
+    jobject_set(jobj, j_cstr_to_buffer("nogui"), jstring_create(nogui));
+
+    LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
+
+    j_release(&parsed);
+    return true;
 }
