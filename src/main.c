@@ -74,6 +74,12 @@ static cap_backend_funcs_t backend = {NULL};
 static int image_data_cb(int width, int height, uint8_t *rgb_data);
 int capture_main(int argc, char *argv[]);
 
+//JSON helper functions
+char* jval_to_string(jvalue_ref parsed, const char *item, const char *def);
+bool jval_to_bool(jvalue_ref parsed, const char *item, bool def);
+int jval_to_int(jvalue_ref parsed, const char *item, int def);
+
+
 static int import_backend_library(const char *library_filename) {
     char *error;
 
@@ -304,18 +310,20 @@ static int image_data_cb(int width, int height, uint8_t *rgb_data)
 
 bool start(LSHandle *sh, LSMessage *message, void *data)
 {
+    PmLogInfo(logcontext, "FNCSTART", 0,  "Starting luna func start");
+    PmLogInfo(logcontext, "FNCSTART", 0,  "Just testing");
     LSError lserror;
     JSchemaInfo schemaInfo;
     jvalue_ref parsed = {0}, value = {0};
     jvalue_ref jobj = {0}, jreturnValue = {0};
-    const char *address = NULL;
-    const char *port = NULL;
-    const char *width = NULL;
-    const char *height = NULL;
-    const char *fps = NULL;
-    const char *backend = NULL;
-    const char *novideo = NULL;
-    const char *nogui = NULL;
+    char *address = "";
+    int port = 0;
+    int width = 0;
+    int height = 0;
+    int fps = 0;
+    char *backend = "";
+    bool novideo = false;
+    bool nogui = false;
     char buf[BUF_SIZE] = {0, };
 
     LSErrorInit(&lserror);
@@ -331,25 +339,18 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
         return true;
     }
 
-    // Get value from payload.input and JSON Object to string without schema validation check
-    value = jobject_get(parsed, j_cstr_to_buffer("address"));
-    address = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("port"));
-    port = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("width"));
-    width = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("height"));
-    height = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("fps"));
-    fps = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("backend"));
-    backend = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("novideo"));
-    novideo = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("nogui"));
-    nogui = jvalue_tostring_simple(value);
 
-    PmLogInfo(logcontext, "STARTFNC", 0, "Address: %s", address);
+    PmLogInfo(logcontext, "FNCSTART", 0,  "Getting values from msg input..");
+    address = jval_to_string(parsed, "address", "");
+    port = jval_to_int(parsed, "port", port);
+    width = jval_to_int(parsed, "width", width);
+    height = jval_to_int(parsed, "height", height);
+    fps = jval_to_int(parsed, "fps", fps);
+    backend = jval_to_string(parsed, "backend", backend);
+    novideo = jval_to_bool(parsed, "novideo", novideo);
+    nogui = jval_to_bool(parsed, "nogui", nogui);
+
+    PmLogInfo(logcontext, "STARTFNC", 0, "Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", address, port, width, height, fps, backend, novideo, nogui);
 
 
     /**
@@ -364,13 +365,13 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
     jreturnValue = jboolean_create(TRUE);
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
     jobject_set(jobj, j_cstr_to_buffer("address"), jstring_create(address));
-    jobject_set(jobj, j_cstr_to_buffer("port"), jstring_create(port));
-    jobject_set(jobj, j_cstr_to_buffer("width"), jstring_create(width));
-    jobject_set(jobj, j_cstr_to_buffer("height"), jstring_create(height));
-    jobject_set(jobj, j_cstr_to_buffer("fps"), jstring_create(fps));
+    jobject_set(jobj, j_cstr_to_buffer("port"), jnumber_create_i32(port));
+    jobject_set(jobj, j_cstr_to_buffer("width"), jnumber_create_i32(width));
+    jobject_set(jobj, j_cstr_to_buffer("height"), jnumber_create_i32(height));
+    jobject_set(jobj, j_cstr_to_buffer("fps"), jnumber_create_i32(fps));
     jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(backend));
-    jobject_set(jobj, j_cstr_to_buffer("novideo"), jstring_create(novideo));
-    jobject_set(jobj, j_cstr_to_buffer("nogui"), jstring_create(nogui));
+    jobject_set(jobj, j_cstr_to_buffer("novideo"), jboolean_create(novideo));
+    jobject_set(jobj, j_cstr_to_buffer("nogui"), jboolean_create(nogui));
 
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
@@ -526,4 +527,45 @@ bool status(LSHandle *sh, LSMessage *message, void *data)
 
     j_release(&parsed);
     return true;
+}
+
+char* jval_to_string(jvalue_ref parsed, const char *item, const char *def)
+{
+    PmLogInfo(logcontext, "FNCTOSTRN", 0,  "Start");
+	jvalue_ref jobj = NULL;
+	raw_buffer jbuf;
+
+	if (!jobject_get_exists(parsed, j_str_to_buffer(item, strlen(item)), &jobj) || !jis_string(jobj)) {
+		return g_strdup(def);
+    }
+
+	jbuf = jstring_get(jobj);
+	return g_strdup(jbuf.m_str);
+}
+
+bool jval_to_bool(jvalue_ref parsed, const char *item, bool def)
+{
+    PmLogInfo(logcontext, "FNCTOBOOL", 0,  "Start");
+	jvalue_ref jobj;
+	bool ret;
+
+	if (!jobject_get_exists(parsed, j_str_to_buffer(item, strlen(item)), &jobj) || !jis_boolean(jobj)) {
+		return def;
+    }
+
+	jboolean_get(jobj, &ret);
+	return ret;
+}
+
+int jval_to_int(jvalue_ref parsed, const char *item, int def)
+{
+    PmLogInfo(logcontext, "FNCTOINT", 0,  "Start");
+	jvalue_ref jobj = NULL;
+	int ret = 0;
+
+	if (!jobject_get_exists(parsed, j_str_to_buffer(item, strlen(item)), &jobj) || !jis_number(jobj)) {
+		return def;
+    }
+	jnumber_get_i32(jobj, &ret);
+	return ret;
 }
