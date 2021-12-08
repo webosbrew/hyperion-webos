@@ -21,9 +21,6 @@
 #define BUF_SIZE 64
 
 
-PmLogContext logcontext;
-
-
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
 #define DLSYM_ERROR_CHECK()                                         \
@@ -32,21 +29,11 @@ PmLogContext logcontext;
         return -2;                                                  \
     }
 
-static struct option long_options[] = {
-    {"width", required_argument, 0, 'x'},
-    {"height", required_argument, 0, 'y'},
-    {"address", required_argument, 0, 'a'},
-    {"port", required_argument, 0, 'p'},
-    {"fps", required_argument, 0, 'f'},
-    {"no-video", no_argument, 0, 'V'},
-    {"no-gui", no_argument, 0, 'G'},
-    {"backend", required_argument, 0, 'b'},
-    {"help", no_argument, 0, 'h'},
-    {0, 0, 0, 0},
-};
+pthread_t capture_thread;
 
 // Main loop for aliving background service
 GMainLoop *gmainLoop;
+PmLogContext logcontext;
 
 LSHandle  *sh = NULL;
 LSMessage *message;
@@ -55,14 +42,15 @@ bool start(LSHandle *sh, LSMessage *message, void *data);
 bool stop(LSHandle *sh, LSMessage *message, void *data);
 bool status(LSHandle *sh, LSMessage *message, void *data);
 
-LSMethod sampleMethods[] = {
+LSMethod lunaMethods[] = {
     {"start", start},
     {"stop", stop},
-    {"status", status},   // luna://org.webosbrew.piccap.service/test
+    {"status", status},   // luna://org.webosbrew.piccap.service/XXXX
 };
 
 
 bool app_quit = false;
+bool isrunning = false;
 
 static const char *_backend = NULL;
 static const char *_address = NULL;
@@ -71,9 +59,13 @@ static int _port = 19400;
 static cap_backend_config_t config = {15, 0, 192, 108};
 static cap_backend_funcs_t backend = {NULL};
 
-static int image_data_cb(int width, int height, uint8_t *rgb_data);
-int capture_main(int argc, char *argv[]);
 
+static int image_data_cb(int width, int height, uint8_t *rgb_data);
+int capture_main();
+void *capture_loop(void *data);
+int cleanup();
+
+int luna_resp(LSHandle *sh, LSMessage *message, char *replyPayload, LSError *lserror);
 //JSON helper functions
 char* jval_to_string(jvalue_ref parsed, const char *item, const char *def);
 bool jval_to_bool(jvalue_ref parsed, const char *item, bool def);
@@ -85,7 +77,7 @@ static int import_backend_library(const char *library_filename) {
 
     void *handle = dlopen(library_filename, RTLD_LAZY);
     if (handle == NULL) {
-        fprintf(stderr, "Error! Failed to load backend library: %s, error: %s\n", library_filename, dlerror());
+        PmLogError(logcontext, "FNCDLOPEN", 0, "Error! Failed to load backend library: %s, error: %s", library_filename, dlerror());
         return -1;
     }
 
@@ -121,84 +113,13 @@ static void handle_signal(int signal)
     switch (signal)
     {
     case SIGINT:
+        PmLogError(logcontext, "SIGINT", 0, "SIGINT called! Stopping capture if running..");
         app_quit = true;
-        hyperion_destroy();
+        cleanup();
         break;
     default:
         break;
     }
-}
-
-static void print_usage()
-{
-    printf("Usage: hyperion-webos -a ADDRESS [OPTION]...\n");
-    printf("\n");
-    printf("Grab screen content continously and send to Hyperion via flatbuffers server.\n");
-    printf("\n");
-    printf("  -x, --width=WIDTH     Width of video frame (default 192)\n");
-    printf("  -y, --height=HEIGHT   Height of video frame (default 108)\n");
-    printf("  -a, --address=ADDR    IP address of Hyperion server\n");
-    printf("  -p, --port=PORT       Port of Hyperion flatbuffers server (default 19400)\n");
-    printf("  -f, --fps=FPS         Framerate for sending video frames (default 15)\n");
-    printf("  -b, --backend=BE      Use specific backend (default auto)\n");
-    printf("  -V, --no-video        Video will not be captured\n");
-    printf("  -G, --no-gui          GUI/UI will not be captured\n");
-}
-
-static int parse_options(int argc, char *argv[])
-{
-    int opt, longindex;
-    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:h", long_options, &longindex)) != -1)
-    {
-        switch (opt)
-        {
-        case 'x':
-            config.resolution_width = atoi(optarg);
-            break;
-        case 'y':
-            config.resolution_height = atoi(optarg);
-            break;
-        case 'a':
-            _address = strdup(optarg);
-            break;
-        case 'p':
-            _port = atol(optarg);
-            break;
-        case 'f':
-            config.fps = atoi(optarg);
-            break;
-        case 'V':
-            config.no_video = 1;
-            break;
-        case 'G':
-            config.no_gui = 1;
-            break;
-        case 'b':
-            _backend = strdup(optarg);
-            break;
-        case 'h':
-        default:
-            print_usage();
-            return 1;
-        }
-    }
-    if (!_address)
-    {
-        fprintf(stderr, "Error! Address not specified.\n");
-        print_usage();
-        return 1;
-    }
-    if (config.fps < 0 || config.fps > 60)
-    {
-        fprintf(stderr, "Error! FPS should between 0 (unlimited) and 60.\n");
-        print_usage();
-        return 1;
-    }
-    if (config.fps == 0)
-        config.framedelay_us = 0;
-    else
-        config.framedelay_us = 1000000 / config.fps;
-    return 0;
 }
 
 int main(int argc, char *argv[])
@@ -209,7 +130,7 @@ int main(int argc, char *argv[])
     LSError lserror;
     LSHandle  *handle = NULL;
     bool bRetVal = FALSE;
-
+    signal(SIGINT, handle_signal);
     LSErrorInit(&lserror);
 
     // create a GMainLoop
@@ -222,7 +143,7 @@ int main(int argc, char *argv[])
     }
     sh = LSMessageGetConnection(message);
 
-    LSRegisterCategory(handle,"/",sampleMethods, NULL, NULL, &lserror);
+    LSRegisterCategory(handle,"/",lunaMethods, NULL, NULL, &lserror);
 
     LSGmainAttach(handle, gmainLoop, &lserror);
 
@@ -234,59 +155,73 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-int capture_main(int argc, char *argv[]){
-    int ret;
-    if ((ret = parse_options(argc, argv)) != 0)
+int capture_main(){
+
+    if ((detect_backend()) != 0)
     {
-        return ret;
+        PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! detect_backend.");
+        cleanup();
+        return -1;
     }
 
-    if (getenv("XDG_RUNTIME_DIR") == NULL)
+    if ((backend.capture_preinit(&config, &image_data_cb)) != 0)
     {
-        setenv("XDG_RUNTIME_DIR", "/tmp/xdg", 1);
+        PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! capture_preinit.");
+        cleanup();
+        return -1;
     }
 
-    if ((ret = detect_backend()) != 0)
+    if ((backend.capture_init()) != 0)
     {
-        fprintf(stderr, "Error! detect_backend.\n");
-        goto cleanup;
+        PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! capture_init.");
+        cleanup();
+        return -1;
     }
 
-    if ((ret = backend.capture_preinit(&config, &image_data_cb)) != 0)
+    if ((backend.capture_start()) != 0)
     {
-        fprintf(stderr, "Error! capture_preinit.\n");
-        goto cleanup;
+        PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! capture_start.");
+        cleanup();
+        return -1;
     }
 
-    if ((ret = backend.capture_init()) != 0)
+    if ((hyperion_client("webos", _address, _port, 150)) != 0)
     {
-        fprintf(stderr, "Error! capture_initialize.\n");
-        goto cleanup;
+        PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! hyperion_client.");
+        cleanup();
+        return -1;
     }
+    PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Capture main init completed.");
 
-    if ((ret = backend.capture_start()) != 0)
-    {
-        fprintf(stderr, "Error! capture_start.\n");
-        goto cleanup;
+    app_quit = false;
+    isrunning = true;
+    if (pthread_create(&capture_thread, NULL, capture_loop, NULL) != 0) {
+        return -1;
     }
+    return 0;
+}
 
-    if ((ret = hyperion_client("webos", _address, _port, 150)) != 0)
-    {
-        fprintf(stderr, "Error! hyperion_client.\n");
-        goto cleanup;
-    }
-    signal(SIGINT, handle_signal);
-    printf("Start connection loop\n");
+void *capture_loop(void *data){
+    PmLogInfo(logcontext, "FNCCPTLOOP", 0, "Starting connection loop");
     while (!app_quit)
     {
         if (hyperion_read() < 0)
         {
-            fprintf(stderr, "Connection terminated.\n");
+            PmLogError(logcontext, "FNCCPTLOOP", 0, "Error! Connection timeout.");
+            isrunning = false;
             app_quit = true;
         }
     }
-    ret = 0;
-cleanup:
+    cleanup();
+    return 0;
+}
+
+int cleanup(){
+    if (isrunning){
+        app_quit=true;
+        pthread_join(capture_thread, NULL);
+        isrunning=false;
+    }
     hyperion_destroy();
     if (backend.capture_terminate) {
         backend.capture_terminate();
@@ -294,15 +229,16 @@ cleanup:
     if (backend.capture_cleanup) {
         backend.capture_cleanup();
     }
-    return ret;
+    return 0;
 }
 
 static int image_data_cb(int width, int height, uint8_t *rgb_data)
 {
     if (hyperion_set_image(rgb_data, width, height) != 0)
     {
-        fprintf(stderr, "Write timeout\n");
+        PmLogError(logcontext, "FNCIMGDATA", 0, "Error! Write timeout.");
         hyperion_destroy();
+        isrunning = false;
         app_quit = true;
     }
 }
@@ -316,14 +252,7 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
     JSchemaInfo schemaInfo;
     jvalue_ref parsed = {0}, value = {0};
     jvalue_ref jobj = {0}, jreturnValue = {0};
-    char *address = "";
-    int port = 0;
-    int width = 0;
-    int height = 0;
-    int fps = 0;
-    char *backend = "";
-    bool novideo = false;
-    bool nogui = false;
+    char *backmsg = "No message";
     char buf[BUF_SIZE] = {0, };
 
     LSErrorInit(&lserror);
@@ -332,46 +261,68 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
     jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
 
     // get message from LS2 and parsing to make object
+    PmLogInfo(logcontext, "FNCSTART", 0,  "Parsing values from msg input..");
     parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(message)), DOMOPT_NOOPT, &schemaInfo);
 
     if (jis_null(parsed)) {
         j_release(&parsed);
+        backmsg = "Error while parsing input!"; 
+        luna_resp(sh, message, backmsg, &lserror);
         return true;
     }
 
-
-    PmLogInfo(logcontext, "FNCSTART", 0,  "Getting values from msg input..");
-    address = jval_to_string(parsed, "address", "");
-    port = jval_to_int(parsed, "port", port);
-    width = jval_to_int(parsed, "width", width);
-    height = jval_to_int(parsed, "height", height);
-    fps = jval_to_int(parsed, "fps", fps);
-    backend = jval_to_string(parsed, "backend", backend);
-    novideo = jval_to_bool(parsed, "novideo", novideo);
-    nogui = jval_to_bool(parsed, "nogui", nogui);
-
-    PmLogInfo(logcontext, "STARTFNC", 0, "Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", address, port, width, height, fps, backend, novideo, nogui);
-
-
-    /**
-     * JSON create test
-     */
-    jobj = jobject_create();
-    if (jis_null(jobj)) {
-        j_release(&jobj);
+    if (isrunning){
+        backmsg = "Capture already running!";
+        luna_resp(sh, message, backmsg, &lserror);
         return true;
     }
-    
+
+    PmLogInfo(logcontext, "FNCSTART", 0,  "Getting values from msg input, or setting defaults..");
+    _address = jval_to_string(parsed, "address", "");
+    _port = jval_to_int(parsed, "port", _port);
+    config.resolution_width = jval_to_int(parsed, "width", config.resolution_width);
+    config.resolution_height = jval_to_int(parsed, "height", config.resolution_height);
+    config.fps = jval_to_int(parsed, "fps", config.fps);
+    _backend = jval_to_string(parsed, "backend", "");
+    config.no_video = jval_to_bool(parsed, "novideo", false);
+    config.no_gui = jval_to_bool(parsed, "nogui", false);
+
+    if (_address == "" || _backend == "" || config.fps < 0 || config.fps > 60){
+        PmLogError(logcontext, "FNCSTART", 0, "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60! | Address: %s | Backend: %s | FPS: %d", _address, _backend, config.fps);
+        backmsg = "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60!";
+        luna_resp(sh, message, backmsg, &lserror);
+        return true;
+    }
+
+    if (config.fps == 0){
+        config.framedelay_us = 0;
+    }else{
+        config.framedelay_us = 1000000 / config.fps;
+    }
+
+    PmLogInfo(logcontext, "FNCSTART", 0, "Using these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+    PmLogInfo(logcontext, "FNCSTART", 0,  "Calling capture start main..");
+
+    if ((capture_main()) != 0){
+        PmLogError(logcontext, "FNCSTART", 0,  "ERROR: Capture main init failed!");
+        backmsg = "ERROR: Capture main init failed!";
+        luna_resp(sh, message, backmsg, &lserror);
+        return true;
+    }
+
+    //Response
     jreturnValue = jboolean_create(TRUE);
+    backmsg = "Capture started successfully!";
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
-    jobject_set(jobj, j_cstr_to_buffer("address"), jstring_create(address));
-    jobject_set(jobj, j_cstr_to_buffer("port"), jnumber_create_i32(port));
-    jobject_set(jobj, j_cstr_to_buffer("width"), jnumber_create_i32(width));
-    jobject_set(jobj, j_cstr_to_buffer("height"), jnumber_create_i32(height));
-    jobject_set(jobj, j_cstr_to_buffer("fps"), jnumber_create_i32(fps));
-    jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(backend));
-    jobject_set(jobj, j_cstr_to_buffer("novideo"), jboolean_create(novideo));
-    jobject_set(jobj, j_cstr_to_buffer("nogui"), jboolean_create(nogui));
+    jobject_set(jobj, j_cstr_to_buffer("address"), jstring_create(_address));
+    jobject_set(jobj, j_cstr_to_buffer("port"), jnumber_create_i32(_port));
+    jobject_set(jobj, j_cstr_to_buffer("width"), jnumber_create_i32(config.resolution_width));
+    jobject_set(jobj, j_cstr_to_buffer("height"), jnumber_create_i32(config.resolution_height));
+    jobject_set(jobj, j_cstr_to_buffer("fps"), jnumber_create_i32(config.fps));
+    jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(_backend));
+    jobject_set(jobj, j_cstr_to_buffer("novideo"), jboolean_create(config.no_video));
+    jobject_set(jobj, j_cstr_to_buffer("nogui"), jboolean_create(config.no_gui));
+    jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
 
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
@@ -385,14 +336,7 @@ bool stop(LSHandle *sh, LSMessage *message, void *data)
     JSchemaInfo schemaInfo;
     jvalue_ref parsed = {0}, value = {0};
     jvalue_ref jobj = {0}, jreturnValue = {0};
-    const char *address = NULL;
-    const char *port = NULL;
-    const char *width = NULL;
-    const char *height = NULL;
-    const char *fps = NULL;
-    const char *backend = NULL;
-    const char *novideo = NULL;
-    const char *nogui = NULL;
+    char *backmsg = "No message";
     char buf[BUF_SIZE] = {0, };
 
     LSErrorInit(&lserror);
@@ -405,49 +349,23 @@ bool stop(LSHandle *sh, LSMessage *message, void *data)
 
     if (jis_null(parsed)) {
         j_release(&parsed);
+        backmsg = "Error while parsing input!"; 
+        luna_resp(sh, message, backmsg, &lserror);
         return true;
     }
 
-    // Get value from payload.input and JSON Object to string without schema validation check
-    value = jobject_get(parsed, j_cstr_to_buffer("address"));
-    address = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("port"));
-    port = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("width"));
-    width = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("height"));
-    height = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("fps"));
-    fps = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("backend"));
-    backend = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("novideo"));
-    novideo = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("nogui"));
-    nogui = jvalue_tostring_simple(value);
-
-
-
-    /**
-     * JSON create test
-     */
-    jobj = jobject_create();
-    if (jis_null(jobj)) {
-        j_release(&jobj);
+    if (!isrunning){
+        backmsg = "FAILED! Capture isn't running!"; 
+        luna_resp(sh, message, backmsg, &lserror);
         return true;
     }
-    
+
+    cleanup();
+
     jreturnValue = jboolean_create(TRUE);
+    backmsg = "Capture stopped successfully!";
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
-    jobject_set(jobj, j_cstr_to_buffer("address"), jstring_create(address));
-    jobject_set(jobj, j_cstr_to_buffer("port"), jstring_create(port));
-    jobject_set(jobj, j_cstr_to_buffer("width"), jstring_create(width));
-    jobject_set(jobj, j_cstr_to_buffer("height"), jstring_create(height));
-    jobject_set(jobj, j_cstr_to_buffer("fps"), jstring_create(fps));
-    jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(backend));
-    jobject_set(jobj, j_cstr_to_buffer("novideo"), jstring_create(novideo));
-    jobject_set(jobj, j_cstr_to_buffer("nogui"), jstring_create(nogui));
-
+    jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
     j_release(&parsed);
@@ -460,14 +378,7 @@ bool status(LSHandle *sh, LSMessage *message, void *data)
     JSchemaInfo schemaInfo;
     jvalue_ref parsed = {0}, value = {0};
     jvalue_ref jobj = {0}, jreturnValue = {0};
-    const char *address = NULL;
-    const char *port = NULL;
-    const char *width = NULL;
-    const char *height = NULL;
-    const char *fps = NULL;
-    const char *backend = NULL;
-    const char *novideo = NULL;
-    const char *nogui = NULL;
+    char *backmsg = "No message";
     char buf[BUF_SIZE] = {0, };
 
     LSErrorInit(&lserror);
@@ -480,49 +391,14 @@ bool status(LSHandle *sh, LSMessage *message, void *data)
 
     if (jis_null(parsed)) {
         j_release(&parsed);
+        backmsg = "Error while parsing input!"; 
+        luna_resp(sh, message, backmsg, &lserror);
         return true;
     }
 
-    // Get value from payload.input and JSON Object to string without schema validation check
-    value = jobject_get(parsed, j_cstr_to_buffer("address"));
-    address = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("port"));
-    port = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("width"));
-    width = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("height"));
-    height = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("fps"));
-    fps = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("backend"));
-    backend = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("novideo"));
-    novideo = jvalue_tostring_simple(value);
-    value = jobject_get(parsed, j_cstr_to_buffer("nogui"));
-    nogui = jvalue_tostring_simple(value);
-
-
-
-    /**
-     * JSON create test
-     */
-    jobj = jobject_create();
-    if (jis_null(jobj)) {
-        j_release(&jobj);
-        return true;
-    }
-    
     jreturnValue = jboolean_create(TRUE);
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
-    jobject_set(jobj, j_cstr_to_buffer("address"), jstring_create(address));
-    jobject_set(jobj, j_cstr_to_buffer("port"), jstring_create(port));
-    jobject_set(jobj, j_cstr_to_buffer("width"), jstring_create(width));
-    jobject_set(jobj, j_cstr_to_buffer("height"), jstring_create(height));
-    jobject_set(jobj, j_cstr_to_buffer("fps"), jstring_create(fps));
-    jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(backend));
-    jobject_set(jobj, j_cstr_to_buffer("novideo"), jstring_create(novideo));
-    jobject_set(jobj, j_cstr_to_buffer("nogui"), jstring_create(nogui));
-
+    jobject_set(jobj, j_cstr_to_buffer("isrunning"), jboolean_create(isrunning));
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
     j_release(&parsed);
@@ -531,11 +407,11 @@ bool status(LSHandle *sh, LSMessage *message, void *data)
 
 char* jval_to_string(jvalue_ref parsed, const char *item, const char *def)
 {
-    PmLogInfo(logcontext, "FNCTOSTRN", 0,  "Start");
 	jvalue_ref jobj = NULL;
 	raw_buffer jbuf;
 
 	if (!jobject_get_exists(parsed, j_str_to_buffer(item, strlen(item)), &jobj) || !jis_string(jobj)) {
+        PmLogInfo(logcontext, "FNCJTOSTRN", 0,  "Didn't got a value for item: %s. Using default value: %s", item, def);
 		return g_strdup(def);
     }
 
@@ -545,11 +421,11 @@ char* jval_to_string(jvalue_ref parsed, const char *item, const char *def)
 
 bool jval_to_bool(jvalue_ref parsed, const char *item, bool def)
 {
-    PmLogInfo(logcontext, "FNCTOBOOL", 0,  "Start");
 	jvalue_ref jobj;
 	bool ret;
 
 	if (!jobject_get_exists(parsed, j_str_to_buffer(item, strlen(item)), &jobj) || !jis_boolean(jobj)) {
+        PmLogInfo(logcontext, "FNCJTOBOOL", 0,  "Didn't got a value for item: %s. Using default value: %d", item, def);
 		return def;
     }
 
@@ -559,13 +435,21 @@ bool jval_to_bool(jvalue_ref parsed, const char *item, bool def)
 
 int jval_to_int(jvalue_ref parsed, const char *item, int def)
 {
-    PmLogInfo(logcontext, "FNCTOINT", 0,  "Start");
 	jvalue_ref jobj = NULL;
 	int ret = 0;
 
 	if (!jobject_get_exists(parsed, j_str_to_buffer(item, strlen(item)), &jobj) || !jis_number(jobj)) {
+        PmLogInfo(logcontext, "FNCJTOINT", 0,  "Didn't got a value for item: %s. Using default value: %d", item, def);
 		return def;
     }
 	jnumber_get_i32(jobj, &ret);
 	return ret;
+}
+
+int luna_resp(LSHandle *sh, LSMessage *message, char *replyPayload, LSError *lserror){
+        PmLogInfo(logcontext, "FNCLRESP", 0,  "Responding with text: %s", replyPayload);
+        jvalue_ref respobj = {0};
+        jobject_set(respobj, j_cstr_to_buffer("returnValue"), jboolean_create(TRUE));
+        jobject_set(respobj, j_cstr_to_buffer("backmsg"), jstring_create(replyPayload));
+        LSMessageReply(sh, message, jvalue_tostring_simple(respobj), lserror);
 }
