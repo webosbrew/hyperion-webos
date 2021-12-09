@@ -310,6 +310,7 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
         return true;
     }
 
+    jobj = jobject_create();
     //Response
     jreturnValue = jboolean_create(TRUE);
     backmsg = "Capture started successfully!";
@@ -362,6 +363,8 @@ bool stop(LSHandle *sh, LSMessage *message, void *data)
 
     cleanup();
 
+    jobj = jobject_create();
+
     jreturnValue = jboolean_create(TRUE);
     backmsg = "Capture stopped successfully!";
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
@@ -395,6 +398,8 @@ bool status(LSHandle *sh, LSMessage *message, void *data)
         luna_resp(sh, message, backmsg, &lserror);
         return true;
     }
+
+    jobj = jobject_create();
 
     jreturnValue = jboolean_create(TRUE);
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
@@ -446,10 +451,12 @@ int jval_to_int(jvalue_ref parsed, const char *item, int def)
 	return ret;
 }
 
-int luna_resp(LSHandle *sh, LSMessage *message, char *replyPayload, LSError *lserror){
+int luna_resp(LSHandle *sh, LSMessage *message, char *replyPayload, LSError *lserror){  
         PmLogInfo(logcontext, "FNCLRESP", 0,  "Responding with text: %s", replyPayload);
         jvalue_ref respobj = {0};
+        respobj = jobject_create();
         jobject_set(respobj, j_cstr_to_buffer("returnValue"), jboolean_create(TRUE));
         jobject_set(respobj, j_cstr_to_buffer("backmsg"), jstring_create(replyPayload));
         LSMessageReply(sh, message, jvalue_tostring_simple(respobj), lserror);
+        j_release(&respobj);
 }
