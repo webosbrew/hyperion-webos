@@ -28,6 +28,8 @@ bool capture_running = true;
 
 DILE_VT_HANDLE vth = NULL;
 DILE_OUTPUTDEVICE_STATE output_state;
+DILE_VT_FRAMEBUFFER_PROPERTY vfbprop;
+DILE_VT_FRAMEBUFFER_CAPABILITY vfbcap;
 
 uint8_t* vfbs[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 int mem_fd = 0;
@@ -103,6 +105,28 @@ int capture_start()
         return -5;
     }
 
+    if (DILE_VT_GetVideoFrameBufferCapability(vth, &vfbcap) != 0) {
+        return -9;
+    }
+
+    fprintf(stderr, "[DILE_VT] vfbs: %d; planes: %d\n", vfbcap.numVfbs, vfbcap.numPlanes);
+    uint32_t** ptr = malloc(4 * vfbcap.numVfbs);
+    for (int vfb = 0; vfb < vfbcap.numVfbs; vfb++) {
+        ptr[vfb] = malloc(4 * vfbcap.numPlanes);
+    }
+
+    vfbprop.ptr = ptr;
+
+    if (DILE_VT_GetAllVideoFrameBufferProperty(vth, &vfbcap, &vfbprop)) {
+        return -10;
+    }
+    fprintf(stderr, "[DILE_VT] pixelFormat: %d; width: %d; height: %d; stride: %d...\n", vfbprop.pixelFormat, vfbprop.width, vfbprop.height, vfbprop.stride);
+    for (int vfb = 0; vfb < vfbcap.numVfbs; vfb++) {
+        for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
+            fprintf(stderr, "[DILE_VT] vfb[%d][%d] = %08x\n", vfb, plane, vfbprop.ptr[vfb][plane]);
+        }
+    }
+
     mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
     if (mem_fd == -1) {
         return -6;
@@ -131,11 +155,6 @@ uint64_t getticks_us()
 uint32_t idx = 0;
 
 void capture_frame() {
-    uint32_t* ptrs[32] = {0}; // FIXME: this is obviously wrong??
-    uint32_t** p1 = &ptrs;
-    DILE_VT_FRAMEBUFFER_PROPERTY vfbprop;
-    vfbprop.ptr = &p1;
-
     if (use_vsync_thread) {
         pthread_mutex_lock(&vsync_lock);
         pthread_cond_wait(&vsync_cond, &vsync_lock);
@@ -147,11 +166,10 @@ void capture_frame() {
     output_state.freezed = 1;
     DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &output_state);
 
-    DILE_VT_GetCurrentVideoFrameBufferProperty(vth, &vfbprop, &idx);
+    DILE_VT_GetCurrentVideoFrameBufferProperty(vth, NULL, &idx);
 
     uint64_t now = getticks_us();
     if (framecount % 30 == 0) {
-        fprintf(stderr, "[DILE_VT] pixel format: %d; width: %d; height: %d; stride: %d\n", vfbprop.pixelFormat, vfbprop.width, vfbprop.height, vfbprop.stride);
         fprintf(stderr, "[DILE_VT] framerate: %.6f FPS\n", (30.0 * 1000000) / (now - start_time));
         start_time = now;
     }
@@ -159,8 +177,11 @@ void capture_frame() {
     framecount += 1;
 
     if (idx < 16) {
-        if (vfbs[idx] == 0)
-            vfbs[idx] = (uint8_t*) mmap(0, vfbprop.stride * vfbprop.height, PROT_READ, MAP_SHARED, mem_fd, (uint32_t) ptrs[0]);
+        if (vfbs[idx] == 0) {
+            fprintf(stderr, "[DILE_VT] vfb %d: pixelFormat: %d; width: %d; height: %d; stride: %d; offset: %08x... ", idx, vfbprop.pixelFormat, vfbprop.width, vfbprop.height, vfbprop.stride, vfbprop.ptr[idx][0]);
+            vfbs[idx] = (uint8_t*) mmap(0, vfbprop.stride * vfbprop.height, PROT_READ, MAP_SHARED, mem_fd, vfbprop.ptr[idx][0]); // ???
+            fprintf(stderr, "ok!\n");
+        }
 
         // Note: vfbprop.width is equal to stride for some reason.
         imagedata_cb(vfbprop.stride / 3, vfbprop.height, vfbs[idx]);
