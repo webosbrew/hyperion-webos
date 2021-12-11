@@ -40,7 +40,7 @@ static const char *_backend = NULL;
 static const char *_address = NULL;
 static int _port = 19400;
 
-static cap_backend_config_t config = {15, 0, 192, 108};
+static cap_backend_config_t config = {0, 0, 192, 108};
 static cap_backend_funcs_t backend = {NULL};
 
 static int image_data_cb(int width, int height, uint8_t *rgb_data);
@@ -104,7 +104,7 @@ static void print_usage()
     printf("  -y, --height=HEIGHT   Height of video frame (default 108)\n");
     printf("  -a, --address=ADDR    IP address of Hyperion server\n");
     printf("  -p, --port=PORT       Port of Hyperion flatbuffers server (default 19400)\n");
-    printf("  -f, --fps=FPS         Framerate for sending video frames (default 15)\n");
+    printf("  -f, --fps=FPS         Framerate for sending video frames (default 0 = unlimited)\n");
     printf("  -b, --backend=BE      Use specific backend (default auto)\n");
     printf("  -V, --no-video        Video will not be captured\n");
     printf("  -G, --no-gui          GUI/UI will not be captured\n");
