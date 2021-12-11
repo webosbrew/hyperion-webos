@@ -15,6 +15,9 @@
 #include <halgal.h>
 
 #include "common.h"
+#include <PmLogLib.h>
+#include <glib.h>
+#include <glib-object.h>
 
 pthread_mutex_t frame_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t capture_thread;
@@ -27,10 +30,10 @@ HAL_GAL_DRAW_SETTINGS settings;
 uint32_t color = 0;
 
 //Other
-const VT_CALLER_T caller[24] = "org.webosbrew.piccap.cap";
+const char *caller = "hyperion-webos_service";
 
 VT_DRIVER *driver;
-VT_CLIENTID_T client[128] = "00";
+char client[128] = "00";
 
 bool capture_initialized = false;
 bool vtcapture_initialized = false;
@@ -76,7 +79,7 @@ size_t len;
 char *addr;
 int fd;
 
-
+PmLogContext logcontext;
 
 VT_RESOLUTION_T resolution = {360, 180};
 
@@ -100,12 +103,15 @@ void NV21_TO_RGB24(unsigned char *yuyv, unsigned char *rgb, int width, int heigh
 void *capture_thread_target(void *data);
 
 int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback_t callback){
+    PmLogGetContext("hyperion-webos_service", &logcontext);
+    PmLogInfo(logcontext, "VTCPREINIT", 0, "Preinit called. Copying config..");
     memcpy(&config, backend_config, sizeof(cap_backend_config_t));
     imagedata_cb = callback;
 
     resolution.w = config.resolution_width;
     resolution.h = config.resolution_height;
 
+    PmLogInfo(logcontext, "VTCPREINIT", 0, "Copying config done. Initialize vars..");
     VT_DUMP_T dump = 2;
     VT_LOC_T loc = {0, 0};
     VT_BUF_T buf_cnt = 3;
@@ -127,43 +133,43 @@ int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback
     rect.h = resolution.h;
 
     flags.pflag = 0;
-
+    PmLogInfo(logcontext, "VTCPREINIT", 0, "Init finished.");
     return 0;
 }
 
 
 int capture_init()
 {
+    PmLogInfo(logcontext, "VTCINIT", 0, "Initialization of capture devices..");
     if(config.no_gui != 1){
-        fprintf(stderr, "Init graphical capture..\n");
-
+        PmLogInfo(logcontext, "VTCINIT", 0, "Graphical capture enabled. Begin init..");
         if ((done = HAL_GAL_Init()) != 0) {
-            fprintf(stderr, "HAL_GAL_Init failed: %x\n", done);
+            PmLogError(logcontext, "VTCINIT", 0, "HAL_GAL_Init failed: %x", done);
             return -1;
         }
-        fprintf(stderr, "HAL_GAL_Init done! Exit: %d\n", done);   
+        PmLogInfo(logcontext, "VTCINIT", 0, "HAL_GAL_Init done! Exit: %d", done);   
 
         if ((done = HAL_GAL_CreateSurface(resolution.w, resolution.h, 0, &surfaceInfo)) != 0) {
-            fprintf(stderr, "HAL_GAL_CreateSurface failed: %x\n", done);
+            PmLogError(logcontext, "VTCINIT", 0, "HAL_GAL_CreateSurface failed: %x", done);
             return -1;
         }
-        fprintf(stderr, "HAL_GAL_CreateSurface done! SurfaceID: %d\n", surfaceInfo.vendorData);
+        PmLogInfo(logcontext, "VTCINIT", 0, "HAL_GAL_CreateSurface done! SurfaceID: %d", surfaceInfo.vendorData);
 
         isrunning = 1;
 
         if ((done = HAL_GAL_CaptureFrameBuffer(&surfaceInfo)) != 0) {
-            fprintf(stderr, "HAL_GAL_CaptureFrameBuffer failed: %x\n", done);
+            PmLogError(logcontext, "VTCINIT", 0, "HAL_GAL_CaptureFrameBuffer failed: %x", done);
             return -1;
         }
-        fprintf(stderr, "HAL_GAL_CaptureFrameBuffer done! %x\n", done);
+        PmLogInfo(logcontext, "VTCINIT", 0, "HAL_GAL_CaptureFrameBuffer done! %x", done);
 
         fd = open("/dev/gfx",2);
         if (fd < 0){
-            fprintf(stderr, "HAL_GAL: gfx open fail result: %d\n", fd);
+            PmLogError(logcontext, "VTCINIT", 0, "HAL_GAL: gfx open fail result: %d", fd);
             return -1;
 
         }else{
-            fprintf(stderr, "HAL_GAL: gfx open ok result: %d\n", fd);
+            PmLogInfo(logcontext, "VTCINIT", 0, "HAL_GAL: gfx open ok result: %d", fd);
         }
 
         len = surfaceInfo.property;
@@ -171,24 +177,31 @@ int capture_init()
             len = surfaceInfo.height * surfaceInfo.pitch;
         }
 
-        fprintf(stderr, "Halgal done!\n");
+        PmLogInfo(logcontext, "VTCINIT", 0, "Halgal done!");
     }
 
     if(config.no_video != 1){
-        fprintf(stderr, "Init video capture..\n");
+        PmLogInfo(logcontext, "VTCINIT", 0, "Init video capture..");
         driver = vtCapture_create();
-        fprintf(stderr, "Driver created!\n");
+        PmLogInfo(logcontext, "VTCINIT", 0, "Driver created!");
 
-         done = vtcapture_initialize();
+        done = vtcapture_initialize();
         if (done == -1){
+            PmLogError(logcontext, "VTCINIT", 0, "vtcapture_initialize failed!");
             return -1;
+        }else if (done == 11){
+            PmLogError(logcontext, "VTCINIT", 0, "vtcapture_initialize failed! No capture permissions!");
+            return 11;
         }else if (done == 17){
             vtcapture_initialized = false;
+            PmLogInfo(logcontext, "VTCINIT", 0, "vtcapture not ready yet!");
         }else if (done == 0){
             vtcapture_initialized = true;
+            PmLogInfo(logcontext, "VTCINIT", 0, "vtcapture initialized!");
         } 
     }
 
+    PmLogInfo(logcontext, "VTCINIT", 0, "Malloc vars..");
     if(config.no_video != 1 && config.no_gui != 1) //Both
     {
         comsize = size0+size1; 
@@ -229,28 +242,33 @@ int capture_init()
         addr = (char *) mmap(0, len, 3, 1, fd, surfaceInfo.offset);
     }
 
+    PmLogInfo(logcontext, "VTCINIT", 0, "Malloc vars finished.");
     capture_initialized = true;
     return 0;
 }
 
 int vtcapture_initialize(){
+    PmLogInfo(logcontext, "VTCVINIT", 0, "Starting vtcapture initialization.");
     int innerdone = 0;
     innerdone = vtCapture_init(driver, caller, client);
         if (innerdone == 17) {
-            fprintf(stderr, "vtCapture_init not ready yet return: %d\n", innerdone);
+            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_init not ready yet return: %d", innerdone);
             return 17;
-        }else if (innerdone !=0){
-            fprintf(stderr, "vtCapture_init failed: %d\nQuitting...\n", innerdone);
+        }else if (innerdone == 11){
+            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_init failed: %d Permission denied! Quitting...", innerdone);
+            return 11;
+        }else if (innerdone != 0){
+            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_init failed: %d Quitting...", innerdone);
             return -1;
         }
-        fprintf(stderr, "vtCapture_init done!\nCaller_ID: %s Client ID: %s \n", caller, client);
+        PmLogInfo(logcontext, "VTCVINIT", 0, "vtCapture_init done! Caller_ID: %s Client ID: %s", caller, client);
 
         innerdone = vtCapture_preprocess(driver, client, &props);
         if (innerdone != 0) {
-            fprintf(stderr, "vtCapture_preprocess failed: %x\nQuitting...\n", innerdone);
+            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_preprocess failed: %x Quitting...", innerdone);
             return -1;
         }
-        fprintf(stderr, "vtCapture_preprocess done!\n");
+        PmLogInfo(logcontext, "VTCVINIT", 0, "vtCapture_preprocess done!");
 
         innerdone = vtCapture_planeInfo(driver, client, &plane);
         if (innerdone == 0 ) {
@@ -262,10 +280,10 @@ int vtcapture_initialize(){
             activeregion = plane.activeregion;
             xa = activeregion.a, ya = activeregion.b, wa = activeregion.c, ha = activeregion.d;
         }else{
-            fprintf(stderr, "vtCapture_planeInfo failed: %x\nQuitting...\n", innerdone);
+            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_planeInfo failed: %xQuitting...", innerdone);
             return -1;
         }
-        fprintf(stderr, "vtCapture_planeInfo done!\nstride: %d\nRegion: x: %d, y: %d, w: %d, h: %d\nActive Region: x: %d, y: %d w: %d h: %d\n", stride, x, y, w, h, xa, ya, wa, ha);
+        PmLogInfo(logcontext, "VTCVINIT", 0, "vtCapture_planeInfo done! stride: %d Region: x: %d, y: %d, w: %d, h: %d Active Region: x: %d, y: %d w: %d h: %d", stride, x, y, w, h, xa, ya, wa, ha);
 
         innerdone = vtCapture_process(driver, client);
         if (innerdone == 0){
@@ -273,10 +291,10 @@ int vtcapture_initialize(){
             capture_initialized = true;
         }else{
             isrunning = 0;
-            fprintf(stderr, "vtCapture_process failed: %x\nQuitting...\n", innerdone);
+            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_process failed: %xQuitting...", innerdone);
             return -1;
         }
-        fprintf(stderr, "vtCapture_process done!\n");
+        PmLogInfo(logcontext, "VTCVINIT", 0, "vtCapture_process done!");
 
         int cnter = 0;
         do{
@@ -288,18 +306,20 @@ int vtcapture_initialize(){
                 size0 = buff.size0;
                 size1 = buff.size1;
             }else if (innerdone != 2){
-                fprintf(stderr, "vtCapture_currentCaptureBuffInfo failed: %x\nQuitting...\n", innerdone);
+                PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_currentCaptureBuffInfo failed: %x Quitting...", innerdone);
                 capture_stop();
                 return -1;
             }
             cnter++;
         }while(innerdone != 0);
-        fprintf(stderr, "vtCapture_currentCaptureBuffInfo done after %d tries!\naddr0: %p addr1: %p size0: %d size1: %d\n", cnter, addr0, addr1, size0, size1);
+        PmLogInfo(logcontext, "VTCVINIT", 0, "vtCapture_currentCaptureBuffInfo done after %d tries! addr0: %p addr1: %p size0: %d size1: %d", cnter, addr0, addr1, size0, size1);
 
+        PmLogInfo(logcontext, "VTCVINIT", 0, "vtcapture initialization finished.");
         return 0;
 }
 
 int capture_start(){
+    PmLogInfo(logcontext, "VTCCPTSTART", 0, "Starting capture thread..");
     capture_run = true;
     if (pthread_create(&capture_thread, NULL, capture_thread_target, NULL) != 0) {
         return -1;
@@ -309,7 +329,7 @@ int capture_start(){
 
 int capture_terminate()
 {
-    fprintf(stderr, "-- Quit called! --\n");
+    PmLogInfo(logcontext, "VTCCPTTERM", 0, "Called termination of vtcapture");
     capture_run = false;
     pthread_join(capture_thread, NULL);
 
@@ -322,9 +342,9 @@ int capture_terminate()
             munmap(addr, len);
             done = close(fd);
             if (done != 0){
-                fprintf(stderr, "gfx close fail result: %d\n", done);
+                PmLogError(logcontext, "VTCCPTTERM", 0, "gfx close fail result: %d", done);
             }else{
-                fprintf(stderr, "gfx close ok result: %d\n", done);
+                PmLogInfo(logcontext, "VTCCPTTERM", 0, "gfx close ok result: %d", done);
             }
         }
         if(config.no_gui != 1 && config.no_video != 1){
@@ -336,11 +356,14 @@ int capture_terminate()
     }
     done = 0;
     if(config.no_video != 1){
+        PmLogInfo(logcontext, "VTCCPTTERM", 0, "Video capture enabled - Also stopping..");
         done += capture_stop_vt();
     }
     if(config.no_gui != 1){
+        PmLogInfo(logcontext, "VTCCPTTERM", 0, "GUI capture enabled - Also stopping..");
         done += capture_stop_hal();
     }
+    PmLogInfo(logcontext, "VTCCPTTERM", 0, "Finished capture termination..");
     return done;
 }
 
@@ -348,52 +371,51 @@ int capture_stop_hal()
 {
     int done = 0;
     isrunning = 0;
-
+    PmLogInfo(logcontext, "VTCHALSTOP", 0, "Stopping HAL capture...");
     if ((done = HAL_GAL_DestroySurface(&surfaceInfo)) != 0) {
-        fprintf(stderr, "Quitting: HAL_GAL_DestroySurface failed: %d\n", done);
+        PmLogError(logcontext, "VTCHALSTOP", 0, "HAL_GAL_DestroySurface failed: %d", done);
         return done;
     }
-    fprintf(stderr, "Quitting: HAL_GAL_DestroySurface done! %d\n", done);
+    PmLogInfo(logcontext, "VTCHALSTOP", 0, "HAL_GAL_DestroySurface done. Result: %d", done);
     return done;
 }
 
 int capture_stop_vt()
 {
     int done;
-
     isrunning = 0;
+    PmLogInfo(logcontext, "VTCVTSTOP", 0, "Stopping VT capture...");
     done = vtCapture_stop(driver, client);
     if (done != 0)
     {
-        fprintf(stderr, "vtCapture_stop failed: %x\nQuitting...\n", done);
-//        capture_terminate();
+        PmLogError(logcontext, "VTCVTSTOP", 0, "vtCapture_stop failed: %x", done);
         return done;
     }
-    fprintf(stderr, "vtCapture_stop done!\n");
-//    capture_terminate();
+    PmLogInfo(logcontext, "VTCVTSTOP", 0, "vtCapture_stop done!");
     return done;
 }
 
 int capture_cleanup()
 {
     int done;
+    PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Capture cleanup...");
     done = vtCapture_postprocess(driver, client);
-        if (done == 0){
-            fprintf(stderr, "Quitting: vtCapture_postprocess done!\n");
-            done = vtCapture_finalize(driver, client);
-            if (done == 0) {
-                fprintf(stderr, "Quitting: vtCapture_finalize done!\n");
-                vtCapture_release(driver);
-                fprintf(stderr, "Quitting: Driver released!\n");
-                memset(&client,0,127);
-                fprintf(stderr, "Quitting!\n");
-                return 0;
-            }
-            fprintf(stderr, "Quitting: vtCapture_finalize failed: %x\n", done);
+    if (done == 0){
+        PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "vtCapture_postprocess done!");
+        done = vtCapture_finalize(driver, client);
+        if (done == 0) {
+            PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "vtCapture_finalize done!");
+            vtCapture_release(driver);
+            PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Driver released!");
+            memset(&client,0,127);
+            PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Cleanup finished!");
+            return 0;
         }
+        PmLogError(logcontext, "VTCCPTCLEAN", 0, "vtCapture_finalize failed: %x", done);
+    }
     vtCapture_finalize(driver, client);
     vtCapture_release(driver);
-    fprintf(stderr, "Quitting with errors: %x!\n", done);
+    PmLogError(logcontext, "VTCCPTCLEAN", 0, "Finishing with errors: %x!", done);
     return -1;
 }
 
@@ -408,7 +430,7 @@ void capture_frame()
 {
     int indone = 0;
     if (!capture_initialized){
-        fprintf(stderr, "Not initialized!\n");
+        PmLogError(logcontext, "VTCCPTFRAME", 0, "Capture devices not initialized yet!");
         return;
     }
     pthread_mutex_lock(&frame_mutex);
@@ -424,7 +446,7 @@ void capture_frame()
 
     if(config.no_gui != 1){
         if ((indone = HAL_GAL_CaptureFrameBuffer(&surfaceInfo)) != 0) {
-            fprintf(stderr, "HAL_GAL_CaptureFrameBuffer failed: %x\n", indone);
+            PmLogError(logcontext, "VTCCPTFRAME", 0, "HAL_GAL_CaptureFrameBuffer failed: %x", indone);
             capture_stop();
             return;
         }
@@ -474,9 +496,9 @@ void send_picture()
 
         if (config.no_video != 1 && vtfrmcnt > 200){
             vtfrmcnt = 0;
-            fprintf(stderr, "Try to init vtcapture again..\n");
+            PmLogInfo(logcontext, "VTCSENDPIC", 0, "Try to init vtcapture again..");
             if (vtcapture_initialize() == 0){
-                fprintf(stderr, "Init possible. Need to implement cleanup and reset, skipping..\n");
+                PmLogInfo(logcontext, "VTCSENDPIC", 0, "Init possible. Need to implement cleanup and reset, skipping..");
                 //TODO: Implement cleanup and restart of vtcapture
                 //restart = true;
                 //app_quit = true;

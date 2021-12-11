@@ -74,10 +74,16 @@ int jval_to_int(jvalue_ref parsed, const char *item, int def);
 
 static int import_backend_library(const char *library_filename) {
     char *error;
-
-    void *handle = dlopen(library_filename, RTLD_LAZY);
+    char libpath[FILENAME_MAX];
+    char *slash="media/developer/apps/usr/palm/services/org.webosbrew.piccap.service/";
+    getcwd(libpath, FILENAME_MAX);
+    PmLogInfo(logcontext, "FNCDLOPEN", 0, "Current working dir: %s", libpath);
+    strcat(libpath, slash);
+    strcat(libpath, library_filename);
+    PmLogInfo(logcontext, "FNCDLOPEN", 0, "Full library path: %s", libpath);
+    void *handle = dlopen(libpath, RTLD_LAZY);
     if (handle == NULL) {
-        PmLogError(logcontext, "FNCDLOPEN", 0, "Error! Failed to load backend library: %s, error: %s", library_filename, dlerror());
+        PmLogError(logcontext, "FNCDLOPEN", 0, "Error! Failed to load backend library: %s, error: %s", libpath, dlerror());
         return -1;
     }
 
@@ -124,7 +130,9 @@ static void handle_signal(int signal)
 
 int main(int argc, char *argv[])
 {
+    //goto working dir
     PmLogGetContext("hyperion-webos_service", &logcontext);
+    PmLogInfo(logcontext, "FNCMAIN", 0, "Service main starting..");
 //    PmLogMsg(logcontext,Info, "MAINFNC", 0,  PMLOGKS("APP_STATUS","deleted"));
 //    PmLogInfo(logcontext, "MAINFNC", 0,  "Teeeest!");
     LSError lserror;
@@ -152,11 +160,14 @@ int main(int argc, char *argv[])
     // Decreases the reference count on a GMainLoop object by one
     g_main_loop_unref(gmainLoop);
 
+    PmLogInfo(logcontext, "FNCMAIN", 0, "Service main finishing..");
     return 0;
 }
 
 int capture_main(){
 
+    PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Beginning capture main init..");
+    PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Detecting backend..");
     if ((detect_backend()) != 0)
     {
         PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! detect_backend.");
@@ -164,6 +175,7 @@ int capture_main(){
         return -1;
     }
 
+    PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Detecting backend..");
     if ((backend.capture_preinit(&config, &image_data_cb)) != 0)
     {
         PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! capture_preinit.");
@@ -171,6 +183,7 @@ int capture_main(){
         return -1;
     }
 
+    PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Initiating capture..");
     if ((backend.capture_init()) != 0)
     {
         PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! capture_init.");
@@ -178,6 +191,7 @@ int capture_main(){
         return -1;
     }
 
+    PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Starting capture..");
     if ((backend.capture_start()) != 0)
     {
         PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! capture_start.");
@@ -185,13 +199,14 @@ int capture_main(){
         return -1;
     }
 
+    PmLogError(logcontext, "FNCCPTMAIN", 0, "Connecting hyperion-client..");
     if ((hyperion_client("webos", _address, _port, 150)) != 0)
     {
         PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! hyperion_client.");
         cleanup();
         return -1;
     }
-    PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Capture main init completed.");
+    PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Capture main init completed. Creating subproccess for looping..");
 
     app_quit = false;
     isrunning = true;
@@ -212,23 +227,30 @@ void *capture_loop(void *data){
             app_quit = true;
         }
     }
+    PmLogInfo(logcontext, "FNCCPTLOOP", 0, "Ending connection loop");
     cleanup();
     return 0;
 }
 
 int cleanup(){
+    PmLogInfo(logcontext, "FNCCLEAN", 0, "Starting cleanup..");
     if (isrunning){
+        PmLogInfo(logcontext, "FNCCLEAN", 0, "Capture is running! Breaking loop and joining thread..");
         app_quit=true;
         pthread_join(capture_thread, NULL);
         isrunning=false;
     }
+    PmLogInfo(logcontext, "FNCCLEAN", 0, "Destroying hyperion-client..");
     hyperion_destroy();
     if (backend.capture_terminate) {
+        PmLogInfo(logcontext, "FNCCLEAN", 0, "Terminating capture within library..");
         backend.capture_terminate();
     }
     if (backend.capture_cleanup) {
+        PmLogInfo(logcontext, "FNCCLEAN", 0, "Cleanup capture within library..");
         backend.capture_cleanup();
     }
+    PmLogInfo(logcontext, "FNCCLEAN", 0, "Cleanup finished.");
     return 0;
 }
 
@@ -246,8 +268,7 @@ static int image_data_cb(int width, int height, uint8_t *rgb_data)
 
 bool start(LSHandle *sh, LSMessage *message, void *data)
 {
-    PmLogInfo(logcontext, "FNCSTART", 0,  "Starting luna func start");
-    PmLogInfo(logcontext, "FNCSTART", 0,  "Just testing");
+    PmLogInfo(logcontext, "FNCSTART", 0,  "Luna call start recieved.");
     LSError lserror;
     JSchemaInfo schemaInfo;
     jvalue_ref parsed = {0}, value = {0};
@@ -327,12 +348,14 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
 
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
+    PmLogInfo(logcontext, "FNCSTART", 0,  "Luna call start finished.");
     j_release(&parsed);
     return true;
 }
 
 bool stop(LSHandle *sh, LSMessage *message, void *data)
 {
+    PmLogInfo(logcontext, "FNCSTOP", 0,  "Luna call stop recieved.");
     LSError lserror;
     JSchemaInfo schemaInfo;
     jvalue_ref parsed = {0}, value = {0};
@@ -371,12 +394,14 @@ bool stop(LSHandle *sh, LSMessage *message, void *data)
     jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
+    PmLogInfo(logcontext, "FNCSTOP", 0,  "Luna call stop finished.");
     j_release(&parsed);
     return true;
 }
 
 bool status(LSHandle *sh, LSMessage *message, void *data)
 {
+    PmLogInfo(logcontext, "FNCSTATUS", 0,  "Luna call status recieved.");
     LSError lserror;
     JSchemaInfo schemaInfo;
     jvalue_ref parsed = {0}, value = {0};
@@ -406,6 +431,7 @@ bool status(LSHandle *sh, LSMessage *message, void *data)
     jobject_set(jobj, j_cstr_to_buffer("isrunning"), jboolean_create(isrunning));
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
+    PmLogInfo(logcontext, "FNCSTATUS", 0,  "Luna call status finished.");
     j_release(&parsed);
     return true;
 }
