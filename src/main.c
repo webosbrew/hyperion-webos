@@ -56,7 +56,7 @@ static const char *_backend = NULL;
 static const char *_address = NULL;
 static int _port = 19400;
 
-static cap_backend_config_t config = {15, 0, 192, 108};
+static cap_backend_config_t config = {0, 0, 192, 108};
 static cap_backend_funcs_t backend = {NULL};
 
 
@@ -170,7 +170,6 @@ static void handle_signal(int signal)
 
 int main(int argc, char *argv[])
 {
-    //goto working dir
     PmLogGetContext("hyperion-webos_service", &logcontext);
     PmLogInfo(logcontext, "FNCMAIN", 0, "Service main starting..");
 //    PmLogMsg(logcontext,Info, "MAINFNC", 0,  PMLOGKS("APP_STATUS","deleted"));
