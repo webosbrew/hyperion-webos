@@ -70,17 +70,58 @@ int luna_resp(LSHandle *sh, LSMessage *message, char *replyPayload, LSError *lse
 char* jval_to_string(jvalue_ref parsed, const char *item, const char *def);
 bool jval_to_bool(jvalue_ref parsed, const char *item, bool def);
 int jval_to_int(jvalue_ref parsed, const char *item, int def);
+int getstartingpath(char *retstr);
 
+int getstartingpath(char *retstr){
+    int length;
+    char fullpath[FILENAME_MAX];
+     
+     /* /proc/self is a symbolic link to the process-ID subdir
+      * of /proc, e.g. /proc/4323 when the pid of the process
+      * of this program is 4323.
+      *
+      * Inside /proc/<pid> there is a symbolic link to the
+      * executable that is running as this <pid>.  This symbolic
+      * link is called "exe".
+      *
+      * So if we read the path where the symlink /proc/self/exe
+      * points to we have the full path of the executable.
+      * https://www.linuxquestions.org/questions/programming-9/get-full-path-of-a-command-in-c-117965/
+      */
+
+
+    length = readlink("/proc/self/exe", fullpath, sizeof(fullpath));
+     
+    /* Catch some errors: */
+    if (length < 0) {
+        PmLogError(logcontext, "FNCGPATH", 0, "Error resolving symlink /proc/self/exe.");
+        return -1;
+    }
+    if (length >= FILENAME_MAX) {
+        PmLogError(logcontext, "FNCGPATH", 0, "Path too long. Truncated.");
+        return -1;
+    }
+
+    /* I don't know why, but the string this readlink() function 
+    * returns is appended with a '@'.
+    */
+    fullpath[length] = '\0';       /* Strip '@' off the end. */
+    fullpath[length-14] = '\0';       //Assuming binary is called hyperion-webos = 14 chars | maybe TODO detection
+
+    strcpy(retstr,fullpath);
+    PmLogInfo(logcontext, "FNCGPATH", 0, "Full path is: %s", retstr);
+    return 0;
+}
 
 static int import_backend_library(const char *library_filename) {
     char *error;
     char libpath[FILENAME_MAX];
-    char *slash="media/developer/apps/usr/palm/services/org.webosbrew.piccap.service/";
-    getcwd(libpath, FILENAME_MAX);
-    PmLogInfo(logcontext, "FNCDLOPEN", 0, "Current working dir: %s", libpath);
-    strcat(libpath, slash);
+
+    getstartingpath(libpath);
+    PmLogInfo(logcontext, "FNCDLOPEN", 0, "Full exec path: %s", libpath);
     strcat(libpath, library_filename);
     PmLogInfo(logcontext, "FNCDLOPEN", 0, "Full library path: %s", libpath);
+
     void *handle = dlopen(libpath, RTLD_LAZY);
     if (handle == NULL) {
         PmLogError(logcontext, "FNCDLOPEN", 0, "Error! Failed to load backend library: %s, error: %s", libpath, dlerror());
@@ -121,7 +162,6 @@ static void handle_signal(int signal)
     case SIGINT:
         PmLogError(logcontext, "SIGINT", 0, "SIGINT called! Stopping capture if running..");
         app_quit = true;
-        cleanup();
         break;
     default:
         break;
@@ -199,7 +239,7 @@ int capture_main(){
         return -1;
     }
 
-    PmLogError(logcontext, "FNCCPTMAIN", 0, "Connecting hyperion-client..");
+    PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Connecting hyperion-client..");
     if ((hyperion_client("webos", _address, _port, 150)) != 0)
     {
         PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! hyperion_client.");
@@ -259,7 +299,6 @@ static int image_data_cb(int width, int height, uint8_t *rgb_data)
     if (hyperion_set_image(rgb_data, width, height) != 0)
     {
         PmLogError(logcontext, "FNCIMGDATA", 0, "Error! Write timeout.");
-        hyperion_destroy();
         isrunning = false;
         app_quit = true;
     }
@@ -384,7 +423,7 @@ bool stop(LSHandle *sh, LSMessage *message, void *data)
         return true;
     }
 
-    cleanup();
+    app_quit=true;
 
     jobj = jobject_create();
 
