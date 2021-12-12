@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 
+#include <libyuv.h>
 #include <dile_vt.h>
 
 #include "common.h"
@@ -175,6 +176,8 @@ uint64_t start_time = 0;
 uint32_t idx = 0;
 
 void capture_frame() {
+    static uint8_t* outbuf = NULL;
+
     if (use_vsync_thread) {
         pthread_mutex_lock(&vsync_lock);
         pthread_cond_wait(&vsync_cond, &vsync_lock);
@@ -200,6 +203,13 @@ void capture_frame() {
     if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_RGB) {
         // Note: vfbprop.width is equal to stride for some reason.
         imagedata_cb(vfbprop.stride / 3, vfbprop.height, vfbs[idx][0]);
+    } else if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_YUV420_SEMI_PLANAR) {
+        if (outbuf == NULL) {
+            outbuf = malloc (vfbprop.width * vfbprop.height * 3);
+        }
+
+        NV21ToRGB24(vfbs[idx][0], vfbprop.stride, vfbs[idx][1], vfbprop.stride, outbuf, vfbprop.width * 3, vfbprop.width, vfbprop.height);
+        imagedata_cb(vfbprop.width, vfbprop.height, outbuf);
     } else {
         fprintf(stderr, "[DILE_VT] Unsupported pixel format: %d\n", vfbprop.pixelFormat);
         for (int plane = 0; plane < vfbcap.numPlanes; plane++) {

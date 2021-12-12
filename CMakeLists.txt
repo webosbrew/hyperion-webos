@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.6)
 project(hyperion-webos VERSION 1.0 LANGUAGES C)
 
+add_subdirectory(libyuv)
 add_subdirectory(tv-native-apis)
 add_subdirectory(flatccrt)
 
@@ -39,7 +40,7 @@ add_library(dile_vt_backend SHARED
 
 target_compile_definitions(dile_vt_backend PRIVATE CAPTURE_BACKEND)
 target_include_directories(dile_vt_backend PRIVATE src src/backends)
-target_link_libraries(dile_vt_backend dile_vt)
+target_link_libraries(dile_vt_backend dile_vt yuv)
 
 # libdile_vt.so seems to be missing DT_NEEDED for libPmLogLib.so.3 - let's just
 # add it over to our library. For some reason adding PmLogLib loaded via
