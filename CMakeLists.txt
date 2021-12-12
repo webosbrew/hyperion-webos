@@ -6,6 +6,26 @@ add_subdirectory(flatccrt)
 
 find_package(PkgConfig REQUIRED)
 
+# ---
+# find required packages
+include(FindPkgConfig)
+
+pkg_check_modules(GTHREAD2 REQUIRED gthread-2.0)
+include_directories(${GTHREAD2_INCLUDE_DIRS})
+
+pkg_check_modules(PBNJSON REQUIRED pbnjson_c)
+include_directories(${PBNJSON_INCLUDE_DIRS})
+
+# -- check for glib 2.0
+pkg_check_modules(GLIB2 REQUIRED glib-2.0)
+include_directories(${GLIB2_INCLUDE_DIRS})
+
+pkg_check_modules(LS2 REQUIRED luna-service2)
+include_directories(${LS2_INCLUDE_DIRS})
+
+pkg_check_modules(PMLOG REQUIRED PmLogLib)
+include_directories(${PMLOG_INCLUDE_DIRS})
+
 pkg_check_modules(EGL egl REQUIRED)
 pkg_check_modules(GLESv2 glesv2 REQUIRED)
 
@@ -14,7 +34,7 @@ add_executable(hyperion-webos
     src/hyperion_client.c
  )
 target_include_directories(hyperion-webos PRIVATE fbs)
-target_link_libraries(hyperion-webos flatccrt pthread dl)
+target_link_libraries(hyperion-webos flatccrt pthread dl ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
 
 # Backends
 add_library(vt_backend SHARED
