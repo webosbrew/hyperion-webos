@@ -74,11 +74,27 @@ int capture_start()
         return -1;
     }
 
+    DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_LIMITATION limitation;
+    if (DILE_VT_GetVideoFrameOutputDeviceLimitation(vth, &limitation) != 0) {
+        return -11;
+    }
+
+    fprintf(stderr, "[DILE_VT] supportScaleUp: %d; (%dx%d)\n", limitation.supportScaleUp, limitation.scaleUpLimitWidth, limitation.scaleUpLimitHeight);
+    fprintf(stderr, "[DILE_VT] supportScaleDown: %d; (%dx%d)\n", limitation.supportScaleDown, limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight);
+    fprintf(stderr, "[DILE_VT] maxResolution: %dx%d\n", limitation.maxResolution.width, limitation.maxResolution.height);
+    fprintf(stderr, "[DILE_VT] input deinterlace: %d; display deinterlace: %d\n", limitation.supportInputVideoDeInterlacing, limitation.supportDisplayVideoDeInterlacing);
+
     if (DILE_VT_SetVideoFrameOutputDeviceDumpLocation(vth, DILE_VT_DISPLAY_OUTPUT) != 0) {
         return -2;
     }
 
     DILE_VT_RECT region = {0, 0, config.resolution_width, config.resolution_height};
+
+    if (region.width < limitation.scaleDownLimitWidth || region.height < limitation.scaleDownLimitHeight) {
+        fprintf(stderr, "[DILE_VT] scaledown limit, overriding to %dx%d\n", limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight);
+        region.width = limitation.scaleDownLimitWidth;
+        region.height = limitation.scaleDownLimitHeight;
+    }
 
     if (DILE_VT_SetVideoFrameOutputDeviceOutputRegion(vth, DILE_VT_DISPLAY_OUTPUT, &region) != 0) {
         return -3;
@@ -117,13 +133,13 @@ int capture_start()
 
     vfbprop.ptr = ptr;
 
-    if (DILE_VT_GetAllVideoFrameBufferProperty(vth, &vfbcap, &vfbprop)) {
+    if (DILE_VT_GetAllVideoFrameBufferProperty(vth, &vfbcap, &vfbprop) != 0) {
         return -10;
     }
     fprintf(stderr, "[DILE_VT] pixelFormat: %d; width: %d; height: %d; stride: %d...\n", vfbprop.pixelFormat, vfbprop.width, vfbprop.height, vfbprop.stride);
     for (int vfb = 0; vfb < vfbcap.numVfbs; vfb++) {
         for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
-            fprintf(stderr, "[DILE_VT] vfb[%d][%d] = %08x\n", vfb, plane, vfbprop.ptr[vfb][plane]);
+            fprintf(stderr, "[DILE_VT] vfb[%d][%d] = 0x%08x\n", vfb, plane, vfbprop.ptr[vfb][plane]);
         }
     }
 
