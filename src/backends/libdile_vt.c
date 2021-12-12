@@ -31,11 +31,18 @@ DILE_OUTPUTDEVICE_STATE output_state;
 DILE_VT_FRAMEBUFFER_PROPERTY vfbprop;
 DILE_VT_FRAMEBUFFER_CAPABILITY vfbcap;
 
-uint8_t* vfbs[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+uint8_t*** vfbs;
 int mem_fd = 0;
 
 void* capture_thread_target(void* data);
 void* vsync_thread_target(void* data);
+
+uint64_t getticks_us()
+{
+    struct timespec tp;
+    clock_gettime(CLOCK_MONOTONIC, &tp);
+    return tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
+}
 
 int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback_t callback)
 {
@@ -136,16 +143,20 @@ int capture_start()
     if (DILE_VT_GetAllVideoFrameBufferProperty(vth, &vfbcap, &vfbprop) != 0) {
         return -10;
     }
-    fprintf(stderr, "[DILE_VT] pixelFormat: %d; width: %d; height: %d; stride: %d...\n", vfbprop.pixelFormat, vfbprop.width, vfbprop.height, vfbprop.stride);
-    for (int vfb = 0; vfb < vfbcap.numVfbs; vfb++) {
-        for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
-            fprintf(stderr, "[DILE_VT] vfb[%d][%d] = 0x%08x\n", vfb, plane, vfbprop.ptr[vfb][plane]);
-        }
-    }
 
     mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
     if (mem_fd == -1) {
         return -6;
+    }
+
+    fprintf(stderr, "[DILE_VT] pixelFormat: %d; width: %d; height: %d; stride: %d...\n", vfbprop.pixelFormat, vfbprop.width, vfbprop.height, vfbprop.stride);
+    vfbs = calloc(vfbcap.numVfbs, sizeof(uint8_t**));
+    for (int vfb = 0; vfb < vfbcap.numVfbs; vfb++) {
+        vfbs[vfb] = calloc(vfbcap.numPlanes, sizeof(uint8_t*));
+        for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
+            fprintf(stderr, "[DILE_VT] vfb[%d][%d] = 0x%08x\n", vfb, plane, vfbprop.ptr[vfb][plane]);
+            vfbs[vfb][plane] = (uint8_t*) mmap(0, vfbprop.stride * vfbprop.height, PROT_READ, MAP_SHARED, mem_fd, vfbprop.ptr[vfb][plane]);
+        }
     }
 
     if (pthread_create (&capture_thread, NULL, capture_thread_target, NULL) != 0) {
@@ -161,13 +172,6 @@ int capture_start()
 
 uint64_t framecount = 0;
 uint64_t start_time = 0;
-uint64_t getticks_us()
-{
-    struct timespec tp;
-    clock_gettime(CLOCK_MONOTONIC, &tp);
-    return tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
-}
-
 uint32_t idx = 0;
 
 void capture_frame() {
@@ -192,15 +196,20 @@ void capture_frame() {
 
     framecount += 1;
 
-    if (idx < 16) {
-        if (vfbs[idx] == 0) {
-            fprintf(stderr, "[DILE_VT] vfb %d: pixelFormat: %d; width: %d; height: %d; stride: %d; offset: %08x... ", idx, vfbprop.pixelFormat, vfbprop.width, vfbprop.height, vfbprop.stride, vfbprop.ptr[idx][0]);
-            vfbs[idx] = (uint8_t*) mmap(0, vfbprop.stride * vfbprop.height, PROT_READ, MAP_SHARED, mem_fd, vfbprop.ptr[idx][0]); // ???
-            fprintf(stderr, "ok!\n");
-        }
 
+    if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_RGB) {
         // Note: vfbprop.width is equal to stride for some reason.
-        imagedata_cb(vfbprop.stride / 3, vfbprop.height, vfbs[idx]);
+        imagedata_cb(vfbprop.stride / 3, vfbprop.height, vfbs[idx][0]);
+    } else {
+        fprintf(stderr, "[DILE_VT] Unsupported pixel format: %d\n", vfbprop.pixelFormat);
+        for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
+            char filename[256];
+            snprintf(filename, sizeof(filename), "/tmp/hyperion-webos-dump.%03d.%03d.raw", idx, plane);
+            FILE* fd = fopen(filename, "wb");
+            fwrite(vfbs[idx][plane], vfbprop.stride * vfbprop.height, 1, fd);
+            fclose(fd);
+            fprintf(stderr, "[DILE_VT] Dumped buffer to: %s\n", filename);
+        }
     }
 
     output_state.freezed = 0;
