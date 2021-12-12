@@ -327,26 +327,29 @@ int capture_start(){
     return 0;
 }
 
-int capture_terminate()
+int capture_cleanup()
 {
-    PmLogInfo(logcontext, "VTCCPTTERM", 0, "Called termination of vtcapture");
-    capture_run = false;
-    pthread_join(capture_thread, NULL);
+    PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Capture cleanup...");
 
     int done;
     if(isrunning == 1){
+        PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Capture was running, freeing vars...");
         if(config.no_video != 1){ 
+            PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Freeing video vars...");
             free(combined);
         }
         if(config.no_gui != 1){
+            PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Freeing gui vars...");
             munmap(addr, len);
             done = close(fd);
             if (done != 0){
-                PmLogError(logcontext, "VTCCPTTERM", 0, "gfx close fail result: %d", done);
+                PmLogError(logcontext, "VTCCPTCLEAN", 0, "gfx close fail result: %d", done);
             }else{
-                PmLogInfo(logcontext, "VTCCPTTERM", 0, "gfx close ok result: %d", done);
+                PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "gfx close ok result: %d", done);
             }
         }
+
+        PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Freeing video combination vars...");
         if(config.no_gui != 1 && config.no_video != 1){
             free(rgb2);
         }
@@ -355,15 +358,7 @@ int capture_terminate()
         free(gesamt);
     }
     done = 0;
-    if(config.no_video != 1){
-        PmLogInfo(logcontext, "VTCCPTTERM", 0, "Video capture enabled - Also stopping..");
-        done += capture_stop_vt();
-    }
-    if(config.no_gui != 1){
-        PmLogInfo(logcontext, "VTCCPTTERM", 0, "GUI capture enabled - Also stopping..");
-        done += capture_stop_hal();
-    }
-    PmLogInfo(logcontext, "VTCCPTTERM", 0, "Finished capture termination..");
+    PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Finished capture cleanup..");
     return done;
 }
 
@@ -395,27 +390,41 @@ int capture_stop_vt()
     return done;
 }
 
-int capture_cleanup()
+int capture_terminate()
 {
     int done;
-    PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Capture cleanup...");
+
+    PmLogInfo(logcontext, "VTCCPTTERM", 0, "Called termination of vtcapture");
+
+    capture_run = false;
+    pthread_join(capture_thread, NULL);
+
+    if(config.no_video != 1){
+        PmLogInfo(logcontext, "VTCCPTTERM", 0, "Video capture enabled - Also stopping..");
+        done += capture_stop_vt();
+    }
+    if(config.no_gui != 1){
+        PmLogInfo(logcontext, "VTCCPTTERM", 0, "GUI capture enabled - Also stopping..");
+        done += capture_stop_hal();
+    }
+
     done = vtCapture_postprocess(driver, client);
     if (done == 0){
-        PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "vtCapture_postprocess done!");
+        PmLogInfo(logcontext, "VTCCPTTERM", 0, "vtCapture_postprocess done!");
         done = vtCapture_finalize(driver, client);
         if (done == 0) {
-            PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "vtCapture_finalize done!");
+            PmLogInfo(logcontext, "VTCCPTTERM", 0, "vtCapture_finalize done!");
             vtCapture_release(driver);
-            PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Driver released!");
+            PmLogInfo(logcontext, "VTCCPTTERM", 0, "Driver released!");
             memset(&client,0,127);
-            PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Cleanup finished!");
+            PmLogInfo(logcontext, "VTCCPTTERM", 0, "Finished capture termination!");
             return 0;
         }
-        PmLogError(logcontext, "VTCCPTCLEAN", 0, "vtCapture_finalize failed: %x", done);
+        PmLogError(logcontext, "VTCCPTTERM", 0, "vtCapture_finalize failed: %x", done);
     }
     vtCapture_finalize(driver, client);
     vtCapture_release(driver);
-    PmLogError(logcontext, "VTCCPTCLEAN", 0, "Finishing with errors: %x!", done);
+    PmLogError(logcontext, "VTCCPTTERM", 0, "Finishing with errors: %x!", done);
     return -1;
 }
 
