@@ -16,6 +16,9 @@
 
 #include "gl_debug.h"
 #include "common.h"
+#include <PmLogLib.h>
+#include <glib.h>
+#include <glib-object.h>
 
 EGLDisplay egl_display;
 EGLContext egl_context;
@@ -32,6 +35,8 @@ GLubyte *pixels_rgba = NULL, *pixels_rgb = NULL;
 
 bool capture_initialized = false;
 bool vt_available = false;
+
+PmLogContext logcontext;
 
 cap_backend_config_t config = {0, 0, 0, 0};
 cap_imagedata_callback_t imagedata_cb = NULL;
@@ -50,7 +55,7 @@ void egl_init()
 
     eglInitialize(egl_display, &major, &minor);
     assert(eglGetError() == EGL_SUCCESS);
-    printf("[EGL] Display, major = %d, minor = %d\n", major, minor);
+    PmLogInfo(logcontext, "VTEGLINIT", 0, "[EGL] Display, major = %d, minor = %d", major, minor);
 
     // 2. Select an appropriate configuration
     EGLint numConfigs;
@@ -101,13 +106,13 @@ void egl_init()
     eglQuerySurface(egl_display, egl_surface, EGL_WIDTH, &suf_width);
     eglQuerySurface(egl_display, egl_surface, EGL_HEIGHT, &suf_height);
     assert(eglGetError() == EGL_SUCCESS);
-    printf("[EGL] Surface size: %dx%d\n", suf_width, suf_height);
+    PmLogInfo(logcontext, "VTEGLINIT", 0, "[EGL] Surface size: %dx%d", suf_width, suf_height);
 
     // Create framebuffer for offscreen rendering
     GL_CHECK(glGenFramebuffers(1, &offscreen_fb));
     GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, offscreen_fb));
 
-    printf("[EGL] init complete\n");
+    PmLogInfo(logcontext, "VTEGLINIT", 0, "[EGL] init complete");
 }
 
 void egl_cleanup()
@@ -122,6 +127,8 @@ void egl_cleanup()
 
 int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback_t callback)
 {
+    PmLogGetContext("hyperion-webos_service", &logcontext);
+    PmLogInfo(logcontext, "VTPREINIT", 0, "Preinit called. Copying config..");
     memcpy(&config, backend_config, sizeof(cap_backend_config_t));
     imagedata_cb = callback;
 
@@ -137,63 +144,63 @@ int capture_init()
     int32_t supported = 0;
     if (VT_IsSystemSupported(&supported) != VT_OK || !supported)
     {
-        fprintf(stderr, "[VT] VT_IsSystemSupported Failed. This TV doesn't support VT.\n");
+        PmLogError(logcontext, "VTCPTINIT", 0, "[VT] VT_IsSystemSupported Failed. This TV doesn't support VT.");
         return -1;
     }
 
-    fprintf(stdout, "[VT] VT_CreateVideoWindow\n");
+    PmLogInfo(logcontext, "VTCPTINIT", 0, "[VT] VT_CreateVideoWindow");
     VT_VIDEO_WINDOW_ID window_id = VT_CreateVideoWindow(0);
     if (window_id == -1)
     {
-        fprintf(stderr, "[VT] VT_CreateVideoWindow Failed\n");
+        PmLogError(logcontext, "VTCPTINIT", 0, "[VT] VT_CreateVideoWindow Failed");
         return -1;
     }
-    fprintf(stdout, "[VT] window_id=%d\n", window_id);
+    PmLogInfo(logcontext, "VTCPTINIT", 0, "[VT] window_id=%d", window_id);
 
-    fprintf(stdout, "[VT] VT_AcquireVideoWindowResource\n");
+    PmLogInfo(logcontext, "VTCPTINIT", 0, "[VT] VT_AcquireVideoWindowResource");
     if (VT_AcquireVideoWindowResource(window_id, &resource_id) != VT_OK)
     {
-        fprintf(stderr, "[VT] VT_AcquireVideoWindowResource Failed\n");
+        PmLogError(logcontext, "VTCPTINIT", 0, "[VT] VT_AcquireVideoWindowResource Failed");
         return -1;
     }
-    fprintf(stdout, "[VT] resource_id=%d\n", resource_id);
+    PmLogInfo(logcontext, "VTCPTINIT", 0, "[VT] resource_id=%d", resource_id);
 
-    fprintf(stdout, "[VT] VT_CreateContext\n");
+    PmLogInfo(logcontext, "VTCPTINIT", 0, "[VT] VT_CreateContext");
     context_id = VT_CreateContext(resource_id, 2);
     if (!context_id || context_id == -1)
     {
-        fprintf(stderr, "[VT] VT_CreateContext Failed\n");
+        PmLogError(logcontext, "VTCPTINIT", 0, "[VT] VT_CreateContext Failed");
         VT_ReleaseVideoWindowResource(resource_id);
         return -1;
     }
-    fprintf(stdout, "[VT] context_id=%d\n", context_id);
+    PmLogInfo(logcontext, "VTCPTINIT", 0, "[VT] context_id=%d", context_id);
 
-    fprintf(stdout, "[VT] VT_SetTextureResolution\n");
+    PmLogInfo(logcontext, "VTCPTINIT", 0, "[VT] VT_SetTextureResolution");
     VT_SetTextureResolution(context_id, &resolution);
     // VT_GetTextureResolution(context_id, &resolution);
 
-    fprintf(stdout, "[VT] VT_SetTextureSourceRegion\n");
+    PmLogInfo(logcontext, "VTCPTINIT", 0, "[VT] VT_SetTextureSourceRegion");
     if (VT_SetTextureSourceRegion(context_id, VT_SOURCE_REGION_MAX) != VT_OK)
     {
-        fprintf(stderr, "[VT] VT_SetTextureSourceRegion Failed\n");
+        PmLogError(logcontext, "VTCPTINIT", 0, "[VT] VT_SetTextureSourceRegion Failed");
         VT_DeleteContext(context_id);
         VT_ReleaseVideoWindowResource(resource_id);
         return -1;
     }
 
-    fprintf(stdout, "[VT] VT_SetTextureSourceLocation\n");
+    PmLogInfo(logcontext, "VTCPTINIT", 0, "[VT] VT_SetTextureSourceLocation");
     if (VT_SetTextureSourceLocation(context_id, VT_SOURCE_LOCATION_DISPLAY) != VT_OK)
     {
-        fprintf(stderr, "[VT] VT_SetTextureSourceLocation Failed\n");
+        PmLogError(logcontext, "VTCPTINIT", 0, "[VT] VT_SetTextureSourceLocation Failed");
         VT_DeleteContext(context_id);
         VT_ReleaseVideoWindowResource(resource_id);
         return -1;
     }
 
-    fprintf(stdout, "[VT] VT_RegisterEventHandler\n");
+    PmLogInfo(logcontext, "VTCPTINIT", 0, "[VT] VT_RegisterEventHandler");
     if (VT_RegisterEventHandler(context_id, &capture_onevent, NULL) != VT_OK)
     {
-        fprintf(stderr, "[VT] VT_RegisterEventHandler Failed\n");
+        PmLogError(logcontext, "VTCPTINIT", 0, "[VT] VT_RegisterEventHandler Failed");
         VT_DeleteContext(context_id);
         VT_ReleaseVideoWindowResource(resource_id);
         return -1;
@@ -222,14 +229,14 @@ int capture_terminate()
         VT_DeleteTexture(context_id, texture_id);
     }
 
-    fprintf(stdout, "[VT] VT_UnRegisterEventHandler\n");
+    PmLogInfo(logcontext, "VTCPTTERM", 0, "[VT] VT_UnRegisterEventHandler");
     if (VT_UnRegisterEventHandler(context_id) != VT_OK)
     {
-        fprintf(stderr, "[VT] VT_UnRegisterEventHandler error!\n");
+        PmLogError(logcontext, "VTCPTTERM", 0, "[VT] VT_UnRegisterEventHandler error!");
     }
-    fprintf(stdout, "[VT] VT_DeleteContext\n");
+    PmLogInfo(logcontext, "VTCPTTERM", 0, "[VT] VT_DeleteContext");
     VT_DeleteContext(context_id);
-    fprintf(stdout, "[VT] VT_ReleaseVideoWindowResource\n");
+    PmLogInfo(logcontext, "VTCPTTERM", 0, "[VT] VT_ReleaseVideoWindowResource");
     VT_ReleaseVideoWindowResource(resource_id);
     return 0;
 }
@@ -287,7 +294,7 @@ void capture_frame()
         }
         else
         {
-            fprintf(stderr, "VT_GenerateTexture failed\n");
+            PmLogError(logcontext, "VTCPTFRAME", 0, "VT_GenerateTexture failed");
             texture_id = 0;
         }
         vt_available = false;
@@ -298,7 +305,7 @@ void capture_frame()
     }
     else if (ticks - fps_ticks >= 1000000)
     {
-        printf("[Stat] Send framerate: %d FPS. gen %d us, read %d us, send %d us\n",
+        PmLogInfo(logcontext, "VTCPTFRAME", 0, "[Stat] Send framerate: %d FPS. gen %d us, read %d us, send %d us",
                framecount, dur_gentexture, dur_readframe, dur_sendframe);
         framecount = 0;
         dur_gentexture = 0;
@@ -318,13 +325,13 @@ void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data)
         capture_frame();
         break;
     case VT_UNAVAILABLE:
-        fprintf(stderr, "VT_UNAVAILABLE received\n");
+        PmLogError(logcontext, "VTCPTONEV", 0, "VT_UNAVAILABLE received");
         break;
     case VT_RESOURCE_BUSY:
-        fprintf(stderr, "VT_RESOURCE_BUSY received\n");
+        PmLogError(logcontext, "VTCPTONEV", 0, "VT_RESOURCE_BUSY received");
         break;
     default:
-        fprintf(stderr, "UNKNOWN event received\n");
+        PmLogError(logcontext, "VTCPTONEV", 0, "UNKNOWN event received");
         break;
     }
 }
@@ -344,7 +351,7 @@ void read_picture()
     GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
     {
-        fprintf(stderr, "failed to make complete framebuffer object %x\n", status);
+        PmLogError(logcontext, "VTREADPIC", 0, "failed to make complete framebuffer object %x", status);
     }
 
     glViewport(0, 0, width, height);
