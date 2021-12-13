@@ -41,11 +41,17 @@ LSMessage *message;
 bool start(LSHandle *sh, LSMessage *message, void *data);
 bool stop(LSHandle *sh, LSMessage *message, void *data);
 bool status(LSHandle *sh, LSMessage *message, void *data);
+bool getSettings(LSHandle *sh, LSMessage *message, void *data);
+bool setSettings(LSHandle *sh, LSMessage *message, void *data);
+bool resetSettings(LSHandle *sh, LSMessage *message, void *data);
 
 LSMethod lunaMethods[] = {
-    {"start", start},
+    {"start", start},       // luna://org.webosbrew.piccap.service/XXXX
     {"stop", stop},
-    {"status", status},   // luna://org.webosbrew.piccap.service/XXXX
+    {"status", status},
+    {"getSettings", getSettings},
+    {"setSettings", setSettings},
+    {"resetSettings", resetSettings},
 };
 
 
@@ -58,6 +64,8 @@ static int _port = 19400;
 
 static cap_backend_config_t config = {0, 0, 192, 108};
 static cap_backend_funcs_t backend = {NULL};
+
+static char* conffile = "config.json";
 
 
 static int image_data_cb(int width, int height, uint8_t *rgb_data);
@@ -231,9 +239,10 @@ int capture_main(){
     }
 
     PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Starting capture..");
-    if ((backend.capture_start()) != 0)
+    int ret;
+    if ((ret = backend.capture_start()) != 0)
     {
-        PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! capture_start.");
+        PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! capture_start. Code: %d", ret);
         cleanup();
         return -1;
     }
@@ -303,6 +312,198 @@ static int image_data_cb(int width, int height, uint8_t *rgb_data)
     }
 }
 
+bool getSettings(LSHandle *sh, LSMessage *message, void *data)
+{
+    PmLogInfo(logcontext, "FNCGCONF", 0,  "Luna call getSettings recieved.");
+    LSError lserror;
+    JSchemaInfo schemaInfo;
+    jvalue_ref parsed = {0}, value = {0};
+    jvalue_ref jobj = {0}, jreturnValue = {0};
+    char *backmsg = "No message";
+    char buf[BUF_SIZE] = {0, };
+    char *confbuf;
+    int len;
+    char confpath[FILENAME_MAX];
+    
+    LSErrorInit(&lserror);
+
+    // Initialize schema
+    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
+
+    PmLogInfo(logcontext, "FNCGCONF", 0,  "Try to read configfile.");
+    getstartingpath(confpath);
+    strcat(confpath, conffile);
+    FILE *jconf = fopen(confpath,"rb");
+    if(jconf){
+        fseek(jconf, 0, SEEK_END);
+        len = ftell(jconf);
+        fseek(jconf, 0, SEEK_SET);
+        confbuf = malloc(len);
+        if(confbuf){
+            PmLogInfo(logcontext, "FNCGCONF", 0,  "Reading file contents..");
+            fread(confbuf, 1, len, jconf);
+        }
+        fclose(jconf);
+    }else{
+        PmLogInfo(logcontext, "FNCGCONF", 0,  "Couldn't read configfile at location %s", confpath);
+    }
+
+    if(confbuf){
+        PmLogInfo(logcontext, "FNCGCONF", 0,  "Read configfile at %s. Contents: %s", confpath, confbuf);
+        parsed = jdom_parse(j_cstr_to_buffer(confbuf), DOMOPT_NOOPT, &schemaInfo);
+        if (jis_null(parsed)) {
+            j_release(&parsed);
+            backmsg = "Error while parsing input!"; 
+            luna_resp(sh, message, backmsg, &lserror);
+            return true;
+        }
+    }else{
+        PmLogInfo(logcontext, "FNCGCONF", 0,  "config.json at path %s not found! Will be using default configuration.", confpath);
+    }
+
+    _address = jval_to_string(parsed, "address", "");
+    _port = jval_to_int(parsed, "port", _port);
+    config.resolution_width = jval_to_int(parsed, "width", config.resolution_width);
+    config.resolution_height = jval_to_int(parsed, "height", config.resolution_height);
+    config.fps = jval_to_int(parsed, "fps", config.fps);
+    _backend = jval_to_string(parsed, "backend", "");
+    config.no_video = jval_to_bool(parsed, "novideo", false);
+    config.no_gui = jval_to_bool(parsed, "nogui", false);
+
+    PmLogInfo(logcontext, "FNCGCONF", 0, "Loaded these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+ 
+    //Response
+    jobj = jobject_create();
+    jreturnValue = jboolean_create(TRUE);
+    backmsg = "Settings got successfully!";
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
+    jobject_set(jobj, j_cstr_to_buffer("address"), jstring_create(_address));
+    jobject_set(jobj, j_cstr_to_buffer("port"), jnumber_create_i32(_port));
+    jobject_set(jobj, j_cstr_to_buffer("width"), jnumber_create_i32(config.resolution_width));
+    jobject_set(jobj, j_cstr_to_buffer("height"), jnumber_create_i32(config.resolution_height));
+    jobject_set(jobj, j_cstr_to_buffer("fps"), jnumber_create_i32(config.fps));
+    jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(_backend));
+    jobject_set(jobj, j_cstr_to_buffer("novideo"), jboolean_create(config.no_video));
+    jobject_set(jobj, j_cstr_to_buffer("nogui"), jboolean_create(config.no_gui));
+    jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
+
+    LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
+
+    PmLogInfo(logcontext, "FNCGCONF", 0,  "Luna call getSettings finished.");
+    j_release(&parsed);
+    return true;
+}
+
+bool setSettings(LSHandle *sh, LSMessage *message, void *data)
+{
+    PmLogInfo(logcontext, "FNCSCONF", 0,  "Luna call setSettings recieved.");
+    LSError lserror;
+    JSchemaInfo schemaInfo;
+    jvalue_ref parsed = {0}, value = {0};
+    jvalue_ref jobj = {0}, jreturnValue = {0};
+    char *backmsg = "No message";
+    char buf[BUF_SIZE] = {0, };
+
+    LSErrorInit(&lserror);
+
+    // Initialize schema
+    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
+
+    // get message from LS2 and parsing to make object
+    PmLogInfo(logcontext, "FNCSCONF", 0,  "Parsing values from msg input..");
+    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(message)), DOMOPT_NOOPT, &schemaInfo);
+
+    if (jis_null(parsed)) {
+        j_release(&parsed);
+        backmsg = "Error while parsing input!"; 
+        luna_resp(sh, message, backmsg, &lserror);
+        return true;
+    }
+
+
+
+    _address = jval_to_string(parsed, "address", "");
+    _port = jval_to_int(parsed, "port", _port);
+    config.resolution_width = jval_to_int(parsed, "width", config.resolution_width);
+    config.resolution_height = jval_to_int(parsed, "height", config.resolution_height);
+    config.fps = jval_to_int(parsed, "fps", config.fps);
+    _backend = jval_to_string(parsed, "backend", "");
+    config.no_video = jval_to_bool(parsed, "novideo", false);
+    config.no_gui = jval_to_bool(parsed, "nogui", false);
+
+    if (_address == "" || _backend == "" || config.fps < 0 || config.fps > 60){
+        PmLogError(logcontext, "FNCSTART", 0, "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60! | Address: %s | Backend: %s | FPS: %d", _address, _backend, config.fps);
+        backmsg = "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60!";
+        luna_resp(sh, message, backmsg, &lserror);
+        return true;
+    }
+
+    if (config.fps == 0){
+        config.framedelay_us = 0;
+    }else{
+        config.framedelay_us = 1000000 / config.fps;
+    }
+
+    PmLogInfo(logcontext, "FNCSTART", 0, "Using these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+ 
+
+
+
+    //Response
+    jobj = jobject_create();
+    jreturnValue = jboolean_create(TRUE);
+    backmsg = "Settings set successfully!";
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
+
+    LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
+
+    PmLogInfo(logcontext, "FNCSCONF", 0,  "Luna call setSettings finished.");
+    j_release(&parsed);
+    return true;
+}
+
+bool resetSettings(LSHandle *sh, LSMessage *message, void *data)
+{
+    PmLogInfo(logcontext, "FNCRCONF", 0,  "Luna call resetSettings recieved.");
+    LSError lserror;
+    JSchemaInfo schemaInfo;
+    jvalue_ref parsed = {0}, value = {0};
+    jvalue_ref jobj = {0}, jreturnValue = {0};
+    char *backmsg = "No message";
+    char buf[BUF_SIZE] = {0, };
+
+    LSErrorInit(&lserror);
+
+    // Initialize schema
+    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
+
+    // get message from LS2 and parsing to make object
+    PmLogInfo(logcontext, "FNCRCONF", 0,  "Parsing values from msg input..");
+    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(message)), DOMOPT_NOOPT, &schemaInfo);
+
+    if (jis_null(parsed)) {
+        j_release(&parsed);
+        backmsg = "Error while parsing input!"; 
+        luna_resp(sh, message, backmsg, &lserror);
+        return true;
+    }
+
+
+
+
+    //Response
+    jobj = jobject_create();
+    jreturnValue = jboolean_create(TRUE);
+    backmsg = "Settings reset successfully!";
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
+
+    LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
+
+    PmLogInfo(logcontext, "FNCRCONF", 0,  "Luna call resetSettings finished.");
+    j_release(&parsed);
+    return true;
+}
+
 
 bool start(LSHandle *sh, LSMessage *message, void *data)
 {
@@ -346,6 +547,7 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
     config.no_video = jval_to_bool(parsed, "novideo", false);
     config.no_gui = jval_to_bool(parsed, "nogui", false);
 
+    //Ensure set before starting
     if (_address == "" || _backend == "" || config.fps < 0 || config.fps > 60){
         PmLogError(logcontext, "FNCSTART", 0, "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60! | Address: %s | Backend: %s | FPS: %d", _address, _backend, config.fps);
         backmsg = "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60!";
