@@ -58,8 +58,8 @@ LSMethod lunaMethods[] = {
 bool app_quit = false;
 bool isrunning = false;
 
-static const char *_backend = NULL;
-static const char *_address = NULL;
+static const char *_backend = "";
+static const char *_address = "";
 static int _port = 19400;
 
 static cap_backend_config_t config = {0, 0, 192, 108};
@@ -72,6 +72,9 @@ static int image_data_cb(int width, int height, uint8_t *rgb_data);
 int capture_main();
 void *capture_loop(void *data);
 int cleanup();
+
+int loadSettings();
+int saveSettings(const char *savestring);
 
 int luna_resp(LSHandle *sh, LSMessage *message, char *replyPayload, LSError *lserror);
 //JSON helper functions
@@ -312,66 +315,100 @@ static int image_data_cb(int width, int height, uint8_t *rgb_data)
     }
 }
 
+int loadSettings(){
+    JSchemaInfo schemaInfo;
+    jvalue_ref parsed = {0};
+    char *confbuf;
+    int sconf, sstr;
+    char confpath[FILENAME_MAX];
+    int retvalue = 0;
+
+    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
+
+    PmLogInfo(logcontext, "FNCLOADCFG", 0,  "Try to read configfile.");
+    getstartingpath(confpath);
+    strcat(confpath, conffile);
+    FILE *jconf = fopen(confpath,"r");
+    if(jconf){
+        fseek(jconf, 0, SEEK_END);
+        sstr = ftell(jconf);
+        rewind(jconf);
+        confbuf = malloc(sizeof(char) * (sstr+1));
+        sconf = fread(confbuf, sizeof(char), sstr, jconf);
+        confbuf[sstr] = '\0';
+        retvalue = 0;
+        if(sstr != sconf){
+            PmLogError(logcontext, "FNCLOADCFG", 0,  "Errors reading configfile at location %s", confpath);
+            free(confbuf);
+            fclose(jconf);
+            return 2;
+        }
+        fclose(jconf);
+    }else{
+        PmLogError(logcontext, "FNCLOADCFG", 0,  "Couldn't read configfile at location %s", confpath);
+        retvalue = 1;
+    }
+
+    if(retvalue == 0){
+        PmLogInfo(logcontext, "FNCLOADCFG", 0,  "Read configfile at %s. Contents: %s", confpath, confbuf);
+        parsed = jdom_parse(j_cstr_to_buffer(confbuf), DOMOPT_NOOPT, &schemaInfo);
+        if (jis_null(parsed)) {
+            PmLogError(logcontext, "FNCLOADCFG", 0,  "Error parsing config.");
+            j_release(&parsed);
+            free(confbuf);
+            return 2;
+        }
+    }else{
+        PmLogError(logcontext, "FNCLOADCFG", 0,  "config.json at path %s may not found! Will be using default configuration.", confpath);
+    }
+
+
+    _address = jval_to_string(parsed, "address", _address);
+    _port = jval_to_int(parsed, "port", _port);
+    config.resolution_width = jval_to_int(parsed, "width", config.resolution_width);
+    config.resolution_height = jval_to_int(parsed, "height", config.resolution_height);
+    config.fps = jval_to_int(parsed, "fps", config.fps);
+    _backend = jval_to_string(parsed, "backend", _backend);
+    config.no_video = jval_to_bool(parsed, "novideo", false);
+    config.no_gui = jval_to_bool(parsed, "nogui", false);
+
+    PmLogInfo(logcontext, "FNCLOADCFG", 0, "Loaded these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+    j_release(&parsed);
+    free(confbuf);
+    return retvalue;
+}
+
 bool getSettings(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCGCONF", 0,  "Luna call getSettings recieved.");
     LSError lserror;
     JSchemaInfo schemaInfo;
-    jvalue_ref parsed = {0}, value = {0};
+    jvalue_ref value = {0};
     jvalue_ref jobj = {0}, jreturnValue = {0};
     char *backmsg = "No message";
     char buf[BUF_SIZE] = {0, };
-    char *confbuf;
-    int len;
-    char confpath[FILENAME_MAX];
-    
+    int load;
+
     LSErrorInit(&lserror);
 
     // Initialize schema
     jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
 
-    PmLogInfo(logcontext, "FNCGCONF", 0,  "Try to read configfile.");
-    getstartingpath(confpath);
-    strcat(confpath, conffile);
-    FILE *jconf = fopen(confpath,"rb");
-    if(jconf){
-        fseek(jconf, 0, SEEK_END);
-        len = ftell(jconf);
-        fseek(jconf, 0, SEEK_SET);
-        confbuf = malloc(len);
-        if(confbuf){
-            PmLogInfo(logcontext, "FNCGCONF", 0,  "Reading file contents..");
-            fread(confbuf, 1, len, jconf);
-        }
-        fclose(jconf);
-    }else{
-        PmLogInfo(logcontext, "FNCGCONF", 0,  "Couldn't read configfile at location %s", confpath);
+    load = loadSettings();
+    if(load == 0){
+        PmLogInfo(logcontext, "FNCGCONF", 0, "Loading settings successfully.");
+    }else if(load == 1){
+        PmLogInfo(logcontext, "FNCGCONF", 0, "Loading settings not successfully. Using default settings.");
+    }else{ 
+        PmLogInfo(logcontext, "FNCGCONF", 0, "Error while loading settings. Sending back error.");
+        backmsg = "Error loading settings!";
+        luna_resp(sh, message, backmsg, &lserror);
+        return true;
     }
 
-    if(confbuf){
-        PmLogInfo(logcontext, "FNCGCONF", 0,  "Read configfile at %s. Contents: %s", confpath, confbuf);
-        parsed = jdom_parse(j_cstr_to_buffer(confbuf), DOMOPT_NOOPT, &schemaInfo);
-        if (jis_null(parsed)) {
-            j_release(&parsed);
-            backmsg = "Error while parsing input!"; 
-            luna_resp(sh, message, backmsg, &lserror);
-            return true;
-        }
-    }else{
-        PmLogInfo(logcontext, "FNCGCONF", 0,  "config.json at path %s not found! Will be using default configuration.", confpath);
-    }
-
-    _address = jval_to_string(parsed, "address", "");
-    _port = jval_to_int(parsed, "port", _port);
-    config.resolution_width = jval_to_int(parsed, "width", config.resolution_width);
-    config.resolution_height = jval_to_int(parsed, "height", config.resolution_height);
-    config.fps = jval_to_int(parsed, "fps", config.fps);
-    _backend = jval_to_string(parsed, "backend", "");
-    config.no_video = jval_to_bool(parsed, "novideo", false);
-    config.no_gui = jval_to_bool(parsed, "nogui", false);
-
-    PmLogInfo(logcontext, "FNCGCONF", 0, "Loaded these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+    PmLogInfo(logcontext, "FNCGCONF", 0, "Sending these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
  
+
     //Response
     jobj = jobject_create();
     jreturnValue = jboolean_create(TRUE);
@@ -390,8 +427,27 @@ bool getSettings(LSHandle *sh, LSMessage *message, void *data)
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
     PmLogInfo(logcontext, "FNCGCONF", 0,  "Luna call getSettings finished.");
-    j_release(&parsed);
+    j_release(&jobj);
     return true;
+}
+
+int saveSettings(const char *savestring){
+    char confpath[FILENAME_MAX];
+
+    PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Try to save configfile.");
+    getstartingpath(confpath);
+    strcat(confpath, conffile);
+    FILE *jconf = fopen(confpath,"w+");
+    if(jconf){
+        PmLogInfo(logcontext, "FNCSAVECFG", 0,  "File opened, writing JSON..");
+        fwrite(savestring, 1, strlen(savestring), jconf);
+        fclose(jconf);
+        return 0;
+    }else{
+        PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Couldn't open configfile for write at location %s", confpath);
+        return 1;
+    }
+    return 1;
 }
 
 bool setSettings(LSHandle *sh, LSMessage *message, void *data)
@@ -400,9 +456,10 @@ bool setSettings(LSHandle *sh, LSMessage *message, void *data)
     LSError lserror;
     JSchemaInfo schemaInfo;
     jvalue_ref parsed = {0}, value = {0};
-    jvalue_ref jobj = {0}, jreturnValue = {0};
+    jvalue_ref tosave = {0}, jreturnValue = {0}, jobj = {0};
     char *backmsg = "No message";
     char buf[BUF_SIZE] = {0, };
+    int save;
 
     LSErrorInit(&lserror);
 
@@ -420,44 +477,50 @@ bool setSettings(LSHandle *sh, LSMessage *message, void *data)
         return true;
     }
 
-
-
-    _address = jval_to_string(parsed, "address", "");
+    PmLogInfo(logcontext, "FNCSCONF", 0,  "Putting parsed values to runtime..");
+    _address = jval_to_string(parsed, "address", _address);
     _port = jval_to_int(parsed, "port", _port);
     config.resolution_width = jval_to_int(parsed, "width", config.resolution_width);
     config.resolution_height = jval_to_int(parsed, "height", config.resolution_height);
     config.fps = jval_to_int(parsed, "fps", config.fps);
-    _backend = jval_to_string(parsed, "backend", "");
+    _backend = jval_to_string(parsed, "backend", _backend);
     config.no_video = jval_to_bool(parsed, "novideo", false);
     config.no_gui = jval_to_bool(parsed, "nogui", false);
 
-    if (_address == "" || _backend == "" || config.fps < 0 || config.fps > 60){
-        PmLogError(logcontext, "FNCSTART", 0, "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60! | Address: %s | Backend: %s | FPS: %d", _address, _backend, config.fps);
-        backmsg = "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60!";
+
+    PmLogInfo(logcontext, "FNCSCONF", 0,  "Creating JSON from runtime..");
+    tosave = jobject_create();
+    jobject_set(tosave, j_cstr_to_buffer("address"), jstring_create(_address));
+    jobject_set(tosave, j_cstr_to_buffer("port"), jnumber_create_i32(_port));
+    jobject_set(tosave, j_cstr_to_buffer("width"), jnumber_create_i32(config.resolution_width));
+    jobject_set(tosave, j_cstr_to_buffer("height"), jnumber_create_i32(config.resolution_height));
+    jobject_set(tosave, j_cstr_to_buffer("fps"), jnumber_create_i32(config.fps));
+    jobject_set(tosave, j_cstr_to_buffer("backend"), jstring_create(_backend));
+    jobject_set(tosave, j_cstr_to_buffer("novideo"), jboolean_create(config.no_video));
+    jobject_set(tosave, j_cstr_to_buffer("nogui"), jboolean_create(config.no_gui));
+
+    PmLogInfo(logcontext, "FNCSCONF", 0,  "Saving JSON to disk..");
+    save = saveSettings(jvalue_tostring_simple(tosave));
+    if(save != 0){
+        backmsg = "Errors while saving file to disk!";
         luna_resp(sh, message, backmsg, &lserror);
         return true;
     }
 
-    if (config.fps == 0){
-        config.framedelay_us = 0;
-    }else{
-        config.framedelay_us = 1000000 / config.fps;
-    }
-
-    PmLogInfo(logcontext, "FNCSTART", 0, "Using these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+    PmLogInfo(logcontext, "FNCSCONF", 0, "Saved these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
  
-
-
-
     //Response
     jobj = jobject_create();
     jreturnValue = jboolean_create(TRUE);
     backmsg = "Settings set successfully!";
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
+    jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
 
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
     PmLogInfo(logcontext, "FNCSCONF", 0,  "Luna call setSettings finished.");
+    j_release(&jobj);
+    j_release(&tosave);
     j_release(&parsed);
     return true;
 }
@@ -488,14 +551,12 @@ bool resetSettings(LSHandle *sh, LSMessage *message, void *data)
         return true;
     }
 
-
-
-
     //Response
     jobj = jobject_create();
     jreturnValue = jboolean_create(TRUE);
     backmsg = "Settings reset successfully!";
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
+    jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
 
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
