@@ -40,48 +40,56 @@ LSMessage *message;
 // Declare of each method
 bool start(LSHandle *sh, LSMessage *message, void *data);
 bool stop(LSHandle *sh, LSMessage *message, void *data);
-bool status(LSHandle *sh, LSMessage *message, void *data);
+bool isRoot(LSHandle *sh, LSMessage *message, void *data);
+bool isRunning(LSHandle *sh, LSMessage *message, void *data);
 bool getSettings(LSHandle *sh, LSMessage *message, void *data);
 bool setSettings(LSHandle *sh, LSMessage *message, void *data);
 bool resetSettings(LSHandle *sh, LSMessage *message, void *data);
+static bool cbmakeRoot(LSHandle *sh, LSMessage *msg, void *user_data);
 
 LSMethod lunaMethods[] = {
     {"start", start},       // luna://org.webosbrew.piccap.service/XXXX
     {"stop", stop},
-    {"status", status},
+    {"isRoot", isRoot},
+    {"isRunning", isRunning},
     {"getSettings", getSettings},
     {"setSettings", setSettings},
     {"resetSettings", resetSettings},
 };
 
 
+bool rooted = false;
 bool app_quit = false;
 bool isrunning = false;
 
 static const char *_backend = "";
 static const char *_address = "";
 static int _port = 19400;
+static bool autostart = false;
 
 static cap_backend_config_t config = {0, 0, 192, 108};
 static cap_backend_funcs_t backend = {NULL};
 
 static char* conffile = "config.json";
 
-
 static int image_data_cb(int width, int height, uint8_t *rgb_data);
 int capture_main();
 void *capture_loop(void *data);
 int cleanup();
 
+int getstartingpath(char *retstr);
+int makeRoot(LSHandle *handle);
+int checkRoot(LSHandle *handle);
+int setDefault();
 int loadSettings();
 int saveSettings(const char *savestring);
+int removeSettings();
 
 int luna_resp(LSHandle *sh, LSMessage *message, char *replyPayload, LSError *lserror);
 //JSON helper functions
 char* jval_to_string(jvalue_ref parsed, const char *item, const char *def);
 bool jval_to_bool(jvalue_ref parsed, const char *item, bool def);
 int jval_to_int(jvalue_ref parsed, const char *item, int def);
-int getstartingpath(char *retstr);
 
 int getstartingpath(char *retstr){
     int length;
@@ -150,6 +158,87 @@ static int import_backend_library(const char *library_filename) {
     return 0;
 }
 
+int setDefault(){
+    PmLogInfo(logcontext, "FNCSETDEF", 0, "Setting default settings to runtime..");
+    _address = "";
+    _port = 19400;
+    config.resolution_width = 192;
+    config.resolution_height = 108;
+    config.fps = 15;
+    _backend = "";
+    config.no_video = false;
+    config.no_gui = false;
+    autostart = false;
+    PmLogInfo(logcontext, "FNCSETDEF", 0, "Finished setting default.");
+    return 0;
+}
+
+int checkRoot(LSHandle *handle){
+    int uid;
+    uid = geteuid();
+    if(uid != 0){
+        PmLogError(logcontext, "FNCISROOT", 0, "Service is not running as root! ID: %d", uid);
+        rooted = false;
+        PmLogInfo(logcontext, "FNCISROOT", 0, "Trying to evaluate using HBChannel/exec-Service!");
+        if(makeRoot(handle) != 0){
+            PmLogError(logcontext, "FNCISROOT", 0, "Error while making root!");
+        }
+    }else{
+        PmLogInfo(logcontext, "FNCISROOT", 0, "Service is running as root!");
+        rooted = true;
+    }
+    return 0;
+}
+
+static bool cbmakeRoot(LSHandle *sh, LSMessage *msg, void *user_data){
+
+    PmLogInfo(logcontext, "FNCMKROOTCB", 0, "Callback received.");
+    JSchemaInfo schemaInfo;
+    jvalue_ref parsed = {0}, value = {0};
+
+    bool retval;
+    char *retstr;
+
+    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
+
+    LSError lserror;
+    LSErrorInit(&lserror);
+
+
+    PmLogInfo(logcontext, "FNCMKROOTCB", 0,  "Parsing values from msg input..");
+    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(msg)), DOMOPT_NOOPT, &schemaInfo);
+
+	if (jis_null(parsed)) {
+        PmLogInfo(logcontext, "FNCMKROOTCB", 0,  "Failed parsing values from msg input!");
+        j_release(&parsed);
+        return false;
+    }
+
+    PmLogInfo(logcontext, "FNCMKROOTCB", 0,  "Checking returnvalue..");
+	retval = jval_to_bool(parsed, "returnValue", false); 
+
+    if(retval)
+    {
+        PmLogInfo(logcontext, "FNCMKROOTCB", 0,  "Returnvalue true, checking stdoutString..");
+        retstr = jval_to_string(parsed, "stdoutString", "No value!");
+        PmLogInfo(logcontext, "FNCMKROOTCB", 0, "HBChannel/exec returned: %s", retstr);
+    }else{
+        PmLogError(logcontext, "FNCMKROOTCB", 0, "Returnvalue false! Errors occoured.");
+    }
+
+    return true;
+}
+
+int makeRoot(LSHandle *handle){
+    LSError lserror;
+    if(!LSCall(handle, "luna://org.webosbrew.hbchannel.service/exec","{\"command\":\"/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service org.webosbrew.piccap.service\"}", cbmakeRoot, NULL, NULL, &lserror)){
+        PmLogError(logcontext, "FNCMKROOT", 0, "Error while executing HBChannel/exec!");
+        LSErrorPrint(&lserror, stderr);
+        return 1;
+    }
+    return 0;
+}
+
 static int detect_backend() {
     /*
      * TODO
@@ -183,8 +272,7 @@ int main(int argc, char *argv[])
 {
     PmLogGetContext("hyperion-webos_service", &logcontext);
     PmLogInfo(logcontext, "FNCMAIN", 0, "Service main starting..");
-//    PmLogMsg(logcontext,Info, "MAINFNC", 0,  PMLOGKS("APP_STATUS","deleted"));
-//    PmLogInfo(logcontext, "MAINFNC", 0,  "Teeeest!");
+
     LSError lserror;
     LSHandle  *handle = NULL;
     bool bRetVal = FALSE;
@@ -205,6 +293,23 @@ int main(int argc, char *argv[])
 
     LSGmainAttach(handle, gmainLoop, &lserror);
 
+    PmLogInfo(logcontext, "FNCMAIN", 0, "Checking service root status..");
+    if(checkRoot(handle) != 0){
+        PmLogError(logcontext, "FNCMAIN", 0, "Error while checking for root status!");
+    }
+
+    PmLogInfo(logcontext, "FNCMAIN", 0, "Setting default settings before loading..");
+    if(setDefault() != 0){
+        PmLogError(logcontext, "FNCMAIN", 0, "Error while setting default settings!");
+    }
+
+    PmLogInfo(logcontext, "FNCMAIN", 0, "Loading settings from disk to runtime..");
+    if(loadSettings() != 0){
+        PmLogError(logcontext, "FNCMAIN", 0, "Error while loading settings!");
+    }
+
+
+    PmLogInfo(logcontext, "FNCMAIN", 0, "Going into main loop..");
     // run to check continuously for new events from each of the event sources
     g_main_loop_run(gmainLoop);
     // Decreases the reference count on a GMainLoop object by one
@@ -369,10 +474,11 @@ int loadSettings(){
     config.resolution_height = jval_to_int(parsed, "height", config.resolution_height);
     config.fps = jval_to_int(parsed, "fps", config.fps);
     _backend = jval_to_string(parsed, "backend", _backend);
-    config.no_video = jval_to_bool(parsed, "novideo", false);
-    config.no_gui = jval_to_bool(parsed, "nogui", false);
+    config.no_video = jval_to_bool(parsed, "novideo", config.no_video);
+    config.no_gui = jval_to_bool(parsed, "nogui", config.no_gui);
+    autostart = jval_to_bool(parsed, "autostart", autostart);
 
-    PmLogInfo(logcontext, "FNCLOADCFG", 0, "Loaded these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+    PmLogInfo(logcontext, "FNCLOADCFG", 0, "Loaded these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d | Autostart: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui, autostart);
     j_release(&parsed);
     free(confbuf);
     return retvalue;
@@ -406,7 +512,7 @@ bool getSettings(LSHandle *sh, LSMessage *message, void *data)
         return true;
     }
 
-    PmLogInfo(logcontext, "FNCGCONF", 0, "Sending these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+    PmLogInfo(logcontext, "FNCGCONF", 0, "Sending these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d | Autostart: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui, autostart);
  
 
     //Response
@@ -422,6 +528,8 @@ bool getSettings(LSHandle *sh, LSMessage *message, void *data)
     jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(_backend));
     jobject_set(jobj, j_cstr_to_buffer("novideo"), jboolean_create(config.no_video));
     jobject_set(jobj, j_cstr_to_buffer("nogui"), jboolean_create(config.no_gui));
+    jobject_set(jobj, j_cstr_to_buffer("autostart"), jboolean_create(autostart));
+    jobject_set(jobj, j_cstr_to_buffer("loaded"), jboolean_create(TRUE));
     jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
 
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
@@ -484,8 +592,9 @@ bool setSettings(LSHandle *sh, LSMessage *message, void *data)
     config.resolution_height = jval_to_int(parsed, "height", config.resolution_height);
     config.fps = jval_to_int(parsed, "fps", config.fps);
     _backend = jval_to_string(parsed, "backend", _backend);
-    config.no_video = jval_to_bool(parsed, "novideo", false);
-    config.no_gui = jval_to_bool(parsed, "nogui", false);
+    config.no_video = jval_to_bool(parsed, "novideo", config.no_video);
+    config.no_gui = jval_to_bool(parsed, "nogui", config.no_gui);
+    autostart = jval_to_bool(parsed, "autostart", autostart);
 
 
     PmLogInfo(logcontext, "FNCSCONF", 0,  "Creating JSON from runtime..");
@@ -498,6 +607,7 @@ bool setSettings(LSHandle *sh, LSMessage *message, void *data)
     jobject_set(tosave, j_cstr_to_buffer("backend"), jstring_create(_backend));
     jobject_set(tosave, j_cstr_to_buffer("novideo"), jboolean_create(config.no_video));
     jobject_set(tosave, j_cstr_to_buffer("nogui"), jboolean_create(config.no_gui));
+    jobject_set(tosave, j_cstr_to_buffer("autostart"), jboolean_create(autostart));
 
     PmLogInfo(logcontext, "FNCSCONF", 0,  "Saving JSON to disk..");
     save = saveSettings(jvalue_tostring_simple(tosave));
@@ -525,6 +635,22 @@ bool setSettings(LSHandle *sh, LSMessage *message, void *data)
     return true;
 }
 
+int removeSettings(){
+    char confpath[FILENAME_MAX];
+
+    PmLogInfo(logcontext, "FNCREMCFG", 0,  "Try to delete configfile.");
+    getstartingpath(confpath);
+    strcat(confpath, conffile);
+    if(remove(confpath) != 0){
+        PmLogError(logcontext, "FNCREMCFG", 0,  "Error while deleting configfile at path %s", confpath);
+        return 1;
+    }else{
+        PmLogInfo(logcontext, "FNCREMCFG", 0,  "Configfile successfully deleted at path %s", confpath);
+        return 0;
+    }
+    return 1;
+}
+
 bool resetSettings(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCRCONF", 0,  "Luna call resetSettings recieved.");
@@ -537,19 +663,26 @@ bool resetSettings(LSHandle *sh, LSMessage *message, void *data)
 
     LSErrorInit(&lserror);
 
-    // Initialize schema
-    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
-
-    // get message from LS2 and parsing to make object
-    PmLogInfo(logcontext, "FNCRCONF", 0,  "Parsing values from msg input..");
-    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(message)), DOMOPT_NOOPT, &schemaInfo);
-
-    if (jis_null(parsed)) {
-        j_release(&parsed);
-        backmsg = "Error while parsing input!"; 
+    PmLogInfo(logcontext, "FNCRCONF", 0,  "Removing settings..");
+    if(removeSettings() != 0){
+        PmLogError(logcontext, "FNCRCONF", 0,  "Errors while removing settings.");
+        backmsg = "Errors while removing settings.";
         luna_resp(sh, message, backmsg, &lserror);
         return true;
     }
+
+    PmLogInfo(logcontext, "FNCRCONF", 0,  "Setting defaults..");
+    if(setDefault() != 0){
+        PmLogError(logcontext, "FNCRCONF", 0,  "Errors while setting default settings!");
+        backmsg = "Errors while setting default settings!";
+        luna_resp(sh, message, backmsg, &lserror);
+        return true;
+    }
+
+    //TODO: Maybe some other cleanup?
+
+    PmLogInfo(logcontext, "FNCRCONF", 0, "Set to these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+ 
 
     //Response
     jobj = jobject_create();
@@ -582,7 +715,7 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
     jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
 
     // get message from LS2 and parsing to make object
-    PmLogInfo(logcontext, "FNCSTART", 0,  "Parsing values from msg input..");
+    PmLogInfo(logcontext, "FNCSTART", 0,  "Parsing values from msg input, ignored for now..");
     parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(message)), DOMOPT_NOOPT, &schemaInfo);
 
     if (jis_null(parsed)) {
@@ -597,16 +730,6 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
         luna_resp(sh, message, backmsg, &lserror);
         return true;
     }
-
-    PmLogInfo(logcontext, "FNCSTART", 0,  "Getting values from msg input, or setting defaults..");
-    _address = jval_to_string(parsed, "address", "");
-    _port = jval_to_int(parsed, "port", _port);
-    config.resolution_width = jval_to_int(parsed, "width", config.resolution_width);
-    config.resolution_height = jval_to_int(parsed, "height", config.resolution_height);
-    config.fps = jval_to_int(parsed, "fps", config.fps);
-    _backend = jval_to_string(parsed, "backend", "");
-    config.no_video = jval_to_bool(parsed, "novideo", false);
-    config.no_gui = jval_to_bool(parsed, "nogui", false);
 
     //Ensure set before starting
     if (_address == "" || _backend == "" || config.fps < 0 || config.fps > 60){
@@ -700,40 +823,51 @@ bool stop(LSHandle *sh, LSMessage *message, void *data)
     return true;
 }
 
-bool status(LSHandle *sh, LSMessage *message, void *data)
+bool isRunning(LSHandle *sh, LSMessage *message, void *data)
 {
-    PmLogInfo(logcontext, "FNCSTATUS", 0,  "Luna call status recieved.");
+    PmLogInfo(logcontext, "FNCISRUN", 0,  "Luna call isRunning recieved.");
     LSError lserror;
-    JSchemaInfo schemaInfo;
-    jvalue_ref parsed = {0}, value = {0};
     jvalue_ref jobj = {0}, jreturnValue = {0};
     char *backmsg = "No message";
     char buf[BUF_SIZE] = {0, };
 
     LSErrorInit(&lserror);
 
-    // Initialize schema
-    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
 
-    // get message from LS2 and parsing to make object
-    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(message)), DOMOPT_NOOPT, &schemaInfo);
+    jobj = jobject_create();
+    jreturnValue = jboolean_create(TRUE);
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
+    jobject_set(jobj, j_cstr_to_buffer("isRunning"), jboolean_create(isrunning));
+    LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
-    if (jis_null(parsed)) {
-        j_release(&parsed);
-        backmsg = "Error while parsing input!"; 
-        luna_resp(sh, message, backmsg, &lserror);
-        return true;
+    PmLogInfo(logcontext, "FNCISRUN", 0,  "Luna call isRunning finished.");
+    return true;
+}
+
+bool isRoot(LSHandle *sh, LSMessage *message, void *data)
+{
+    PmLogInfo(logcontext, "FNCISROOT", 0,  "Luna call isRoot recieved.");
+    LSError lserror;
+    jvalue_ref jobj = {0}, jreturnValue = {0};
+    char *backmsg = "No message";
+    char buf[BUF_SIZE] = {0, };
+
+    LSErrorInit(&lserror);
+
+    if(rooted){
+        backmsg = "Running as root!";
+    }else{
+        backmsg = "Not running as root!";
     }
 
     jobj = jobject_create();
-
     jreturnValue = jboolean_create(TRUE);
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
-    jobject_set(jobj, j_cstr_to_buffer("isrunning"), jboolean_create(isrunning));
+    jobject_set(jobj, j_cstr_to_buffer("isRoot"), jboolean_create(rooted));
+    jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
-    PmLogInfo(logcontext, "FNCSTATUS", 0,  "Luna call status finished.");
-    j_release(&parsed);
+    PmLogInfo(logcontext, "FNCISROOT", 0,  "Luna call isRoot finished.");
     return true;
 }
 
