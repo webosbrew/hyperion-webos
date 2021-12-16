@@ -227,6 +227,8 @@ static bool cbmakeRoot(LSHandle *sh, LSMessage *msg, void *user_data){
         PmLogInfo(logcontext, "FNCMKROOTCB", 0,  "Returnvalue true, checking stdoutString..");
         retstr = jval_to_string(parsed, "stdoutString", "No value!");
         PmLogInfo(logcontext, "FNCMKROOTCB", 0, "HBChannel/exec returned: %s", retstr);
+        PmLogInfo(logcontext, "FNCMKROOTCB", 0, "Lets terminate us, to get restarted! :)");
+        raise(SIGTERM);
     }else{
         PmLogError(logcontext, "FNCMKROOTCB", 0, "Returnvalue false! Errors occoured.");
     }
@@ -534,14 +536,14 @@ bool getSettings(LSHandle *sh, LSMessage *message, void *data)
     jreturnValue = jboolean_create(TRUE);
     backmsg = "Settings got successfully!";
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
-    jobject_set(jobj, j_cstr_to_buffer("address"), jstring_create(_address));
+    jobject_set(jobj, j_cstr_to_buffer("ip"), jstring_create(_address));
     jobject_set(jobj, j_cstr_to_buffer("port"), jnumber_create_i32(_port));
     jobject_set(jobj, j_cstr_to_buffer("width"), jnumber_create_i32(config.resolution_width));
     jobject_set(jobj, j_cstr_to_buffer("height"), jnumber_create_i32(config.resolution_height));
     jobject_set(jobj, j_cstr_to_buffer("fps"), jnumber_create_i32(config.fps));
     jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(_backend));
-    jobject_set(jobj, j_cstr_to_buffer("novideo"), jboolean_create(config.no_video));
-    jobject_set(jobj, j_cstr_to_buffer("nogui"), jboolean_create(config.no_gui));
+    jobject_set(jobj, j_cstr_to_buffer("captureVideo"), jboolean_create(!config.no_video));
+    jobject_set(jobj, j_cstr_to_buffer("captureUI"), jboolean_create(!config.no_gui));
     jobject_set(jobj, j_cstr_to_buffer("autostart"), jboolean_create(autostart));
     jobject_set(jobj, j_cstr_to_buffer("loaded"), jboolean_create(TRUE));
     jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
@@ -600,14 +602,14 @@ bool setSettings(LSHandle *sh, LSMessage *message, void *data)
     }
 
     PmLogInfo(logcontext, "FNCSCONF", 0,  "Putting parsed values to runtime..");
-    _address = jval_to_string(parsed, "address", _address);
+    _address = jval_to_string(parsed, "ip", _address);
     _port = jval_to_int(parsed, "port", _port);
     config.resolution_width = jval_to_int(parsed, "width", config.resolution_width);
     config.resolution_height = jval_to_int(parsed, "height", config.resolution_height);
     config.fps = jval_to_int(parsed, "fps", config.fps);
     _backend = jval_to_string(parsed, "backend", _backend);
-    config.no_video = jval_to_bool(parsed, "novideo", config.no_video);
-    config.no_gui = jval_to_bool(parsed, "nogui", config.no_gui);
+    config.no_video = !jval_to_bool(parsed, "captureVideo", !config.no_video);
+    config.no_gui = !jval_to_bool(parsed, "captureUI", !config.no_gui);
     autostart = jval_to_bool(parsed, "autostart", autostart);
 
 
@@ -901,7 +903,7 @@ bool isRoot(LSHandle *sh, LSMessage *message, void *data)
     jobj = jobject_create();
     jreturnValue = jboolean_create(TRUE);
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
-    jobject_set(jobj, j_cstr_to_buffer("isRoot"), jboolean_create(rooted));
+    jobject_set(jobj, j_cstr_to_buffer("rootStatus"), jboolean_create(rooted));
     jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
