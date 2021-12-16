@@ -45,6 +45,9 @@ bool isRunning(LSHandle *sh, LSMessage *message, void *data);
 bool getSettings(LSHandle *sh, LSMessage *message, void *data);
 bool setSettings(LSHandle *sh, LSMessage *message, void *data);
 bool resetSettings(LSHandle *sh, LSMessage *message, void *data);
+bool restart(LSHandle *sh, LSMessage *message, void *data);
+
+//Callbacks
 static bool cbmakeRoot(LSHandle *sh, LSMessage *msg, void *user_data);
 
 LSMethod lunaMethods[] = {
@@ -55,11 +58,13 @@ LSMethod lunaMethods[] = {
     {"getSettings", getSettings},
     {"setSettings", setSettings},
     {"resetSettings", resetSettings},
+    {"restart", restart}
 };
 
 
 bool rooted = false;
 bool app_quit = false;
+bool exitme = false;
 bool isrunning = false;
 
 static const char *_backend = "";
@@ -263,6 +268,11 @@ static void handle_signal(int signal)
         PmLogError(logcontext, "SIGINT", 0, "SIGINT called! Stopping capture if running..");
         app_quit = true;
         break;
+    case SIGTERM:
+        PmLogError(logcontext, "SIGTERM", 0, "SIGTERM called! Stopping capture if running and exit..");
+        exitme = true;
+        app_quit = true;
+        break;
     default:
         break;
     }
@@ -384,6 +394,10 @@ void *capture_loop(void *data){
         }
     }
     PmLogInfo(logcontext, "FNCCPTLOOP", 0, "Ending connection loop");
+    if(exitme){
+        PmLogInfo(logcontext, "FNCCPTLOOP", 0, "exitme true -> Exit");
+        exit(0);
+    }
     cleanup();
     return 0;
 }
@@ -822,6 +836,30 @@ bool stop(LSHandle *sh, LSMessage *message, void *data)
     j_release(&parsed);
     return true;
 }
+
+bool restart(LSHandle *sh, LSMessage *message, void *data)
+{
+    PmLogInfo(logcontext, "FNCRESTART", 0,  "Luna call restart recieved.");
+    LSError lserror;
+    jvalue_ref jobj = {0}, jreturnValue = {0};
+    char *backmsg = "No message";
+    char buf[BUF_SIZE] = {0, };
+
+    LSErrorInit(&lserror);
+
+    backmsg = "Killing service..";
+
+    jobj = jobject_create();
+    jreturnValue = jboolean_create(TRUE);
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jreturnValue);
+    jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
+    LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
+
+    PmLogInfo(logcontext, "FNCISRUN", 0,  "Luna call isRunning finished.");
+    raise(SIGTERM);
+    return true;
+}
+
 
 bool isRunning(LSHandle *sh, LSMessage *message, void *data)
 {
