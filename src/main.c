@@ -167,10 +167,10 @@ int setDefault(){
     PmLogInfo(logcontext, "FNCSETDEF", 0, "Setting default settings to runtime..");
     _address = "";
     _port = 19400;
-    config.resolution_width = 192;
-    config.resolution_height = 108;
-    config.fps = 15;
-    _backend = "";
+    config.resolution_width = 360;
+    config.resolution_height = 180;
+    config.fps = 0;
+    _backend = "libdile_vt";
     config.no_video = false;
     config.no_gui = false;
     autostart = false;
@@ -320,15 +320,48 @@ int main(int argc, char *argv[])
         PmLogError(logcontext, "FNCMAIN", 0, "Error while loading settings!");
     }
 
+    if(autostart && !rooted){
+        PmLogError(logcontext, "FNCMAIN", 0, "Service isn't rooted! Setting autostart to false.");
+        autostart = false;
+    }
 
-    PmLogInfo(logcontext, "FNCMAIN", 0, "Going into main loop..");
-    // run to check continuously for new events from each of the event sources
-    g_main_loop_run(gmainLoop);
-    // Decreases the reference count on a GMainLoop object by one
-    g_main_loop_unref(gmainLoop);
+    if(autostart){
+        if (isrunning){
+            PmLogError(logcontext, "FNCMAIN", 0,  "Capture already running");
+            goto skip;
+        }
 
-    PmLogInfo(logcontext, "FNCMAIN", 0, "Service main finishing..");
-    return 0;
+        //Ensure set before starting
+        if (_address == "" || _backend == "" || config.fps < 0 || config.fps > 60){
+            PmLogError(logcontext, "FNCMAIN", 0, "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60! | Address: %s | Backend: %s | FPS: %d", _address, _backend, config.fps);
+            goto skip;
+        }
+
+        if (config.fps == 0){
+            config.framedelay_us = 0;
+        }else{
+            config.framedelay_us = 1000000 / config.fps;
+        }
+
+        PmLogInfo(logcontext, "FNCMAIN", 0, "Using these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d | Autostart: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui, autostart);
+        PmLogInfo(logcontext, "FNCMAIN", 0,  "Calling capture start main..");
+
+        if ((capture_main()) != 0){
+            PmLogError(logcontext, "FNCMAIN", 0,  "ERROR: Capture main init failed!");
+            goto skip;
+        }
+
+    }
+
+    skip:
+        PmLogInfo(logcontext, "FNCMAIN", 0, "Going into main loop..");
+        // run to check continuously for new events from each of the event sources
+        g_main_loop_run(gmainLoop);
+        // Decreases the reference count on a GMainLoop object by one
+        g_main_loop_unref(gmainLoop);
+
+        PmLogInfo(logcontext, "FNCMAIN", 0, "Service main finishing..");
+        return 0;
 }
 
 int capture_main(){
@@ -444,7 +477,7 @@ int loadSettings(){
     char confpath[FILENAME_MAX];
     int retvalue = 0;
 
-    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
+    
 
     PmLogInfo(logcontext, "FNCLOADCFG", 0,  "Try to read configfile.");
     getstartingpath(confpath);
@@ -472,6 +505,7 @@ int loadSettings(){
 
     if(retvalue == 0){
         PmLogInfo(logcontext, "FNCLOADCFG", 0,  "Read configfile at %s. Contents: %s", confpath, confbuf);
+        jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
         parsed = jdom_parse(j_cstr_to_buffer(confbuf), DOMOPT_NOOPT, &schemaInfo);
         if (jis_null(parsed)) {
             PmLogError(logcontext, "FNCLOADCFG", 0,  "Error parsing config.");
@@ -479,6 +513,7 @@ int loadSettings(){
             free(confbuf);
             return 2;
         }
+        free(confbuf);
     }else{
         PmLogError(logcontext, "FNCLOADCFG", 0,  "config.json at path %s may not found! Will be using default configuration.", confpath);
     }
@@ -496,7 +531,6 @@ int loadSettings(){
 
     PmLogInfo(logcontext, "FNCLOADCFG", 0, "Loaded these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d | Autostart: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui, autostart);
     j_release(&parsed);
-    free(confbuf);
     return retvalue;
 }
 
@@ -514,8 +548,7 @@ bool getSettings(LSHandle *sh, LSMessage *message, void *data)
     LSErrorInit(&lserror);
 
     // Initialize schema
-    jschema_info_init (&schemaInfo, jschema_all(), NULL, NULL);
-
+   
     load = loadSettings();
     if(load == 0){
         PmLogInfo(logcontext, "FNCGCONF", 0, "Loading settings successfully.");
@@ -530,7 +563,6 @@ bool getSettings(LSHandle *sh, LSMessage *message, void *data)
 
     PmLogInfo(logcontext, "FNCGCONF", 0, "Sending these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d | Autostart: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui, autostart);
  
-
     //Response
     jobj = jobject_create();
     jreturnValue = jboolean_create(TRUE);
@@ -544,8 +576,7 @@ bool getSettings(LSHandle *sh, LSMessage *message, void *data)
     jobject_set(jobj, j_cstr_to_buffer("backend"), jstring_create(_backend));
     jobject_set(jobj, j_cstr_to_buffer("captureVideo"), jboolean_create(!config.no_video));
     jobject_set(jobj, j_cstr_to_buffer("captureUI"), jboolean_create(!config.no_gui));
-    jobject_set(jobj, j_cstr_to_buffer("autostart"), jboolean_create(autostart));
-    jobject_set(jobj, j_cstr_to_buffer("loaded"), jboolean_create(TRUE));
+    jobject_set(jobj, j_cstr_to_buffer("autostart"), jboolean_create(autostart)); 
     jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
 
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
@@ -633,7 +664,7 @@ bool setSettings(LSHandle *sh, LSMessage *message, void *data)
         return true;
     }
 
-    PmLogInfo(logcontext, "FNCSCONF", 0, "Saved these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+    PmLogInfo(logcontext, "FNCSCONF", 0, "Saved these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d | Autostart: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui, autostart);
  
     //Response
     jobj = jobject_create();
@@ -697,7 +728,7 @@ bool resetSettings(LSHandle *sh, LSMessage *message, void *data)
 
     //TODO: Maybe some other cleanup?
 
-    PmLogInfo(logcontext, "FNCRCONF", 0, "Set to these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+    PmLogInfo(logcontext, "FNCRCONF", 0, "Set to these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d | Autostart: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui, autostart);
  
 
     //Response
@@ -736,13 +767,22 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
 
     if (jis_null(parsed)) {
         j_release(&parsed);
+        PmLogError(logcontext, "FNCSTART", 0,  "Error while parsing input");
         backmsg = "Error while parsing input!"; 
         luna_resp(sh, message, backmsg, &lserror);
         return true;
     }
 
     if (isrunning){
+        PmLogError(logcontext, "FNCSTART", 0,  "Capture already running");
         backmsg = "Capture already running!";
+        luna_resp(sh, message, backmsg, &lserror);
+        return true;
+    }
+
+    if (!rooted){
+        PmLogError(logcontext, "FNCSTART", 0,  "Service not rooted");
+        backmsg = "Service not running as root!";
         luna_resp(sh, message, backmsg, &lserror);
         return true;
     }
@@ -761,7 +801,7 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
         config.framedelay_us = 1000000 / config.fps;
     }
 
-    PmLogInfo(logcontext, "FNCSTART", 0, "Using these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui);
+    PmLogInfo(logcontext, "FNCSTART", 0, "Using these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d | Autostart: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui, autostart);
     PmLogInfo(logcontext, "FNCSTART", 0,  "Calling capture start main..");
 
     if ((capture_main()) != 0){
