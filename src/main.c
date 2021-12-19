@@ -187,25 +187,25 @@ int main(int argc, char *argv[])
 
     if ((ret = backend.capture_preinit(&config, &image_data_cb)) != 0)
     {
-        fprintf(stderr, "Error! capture_preinit.\n");
+        fprintf(stderr, "Error! capture_preinit: %d.\n", ret);
         goto cleanup;
     }
 
     if ((ret = backend.capture_init()) != 0)
     {
-        fprintf(stderr, "Error! capture_initialize.\n");
+        fprintf(stderr, "Error! capture_initialize: %d.\n", ret);
         goto cleanup;
     }
 
     if ((ret = backend.capture_start()) != 0)
     {
-        fprintf(stderr, "Error! capture_start.\n");
+        fprintf(stderr, "Error! capture_start: %d.\n", ret);
         goto cleanup;
     }
 
     if ((ret = hyperion_client("webos", _address, _port, 150)) != 0)
     {
-        fprintf(stderr, "Error! hyperion_client.\n");
+        fprintf(stderr, "Error! hyperion_client: %d.\n", ret);
         goto cleanup;
     }
     signal(SIGINT, handle_signal);
