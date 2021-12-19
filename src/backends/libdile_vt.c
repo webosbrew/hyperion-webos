@@ -18,8 +18,8 @@
 cap_backend_config_t config = {0, 0, 0, 0};
 cap_imagedata_callback_t imagedata_cb = NULL;
 
-pthread_t capture_thread;
-pthread_t vsync_thread;
+pthread_t capture_thread = NULL;
+pthread_t vsync_thread = NULL;
 
 pthread_mutex_t vsync_lock;
 pthread_cond_t vsync_cond;
@@ -63,15 +63,24 @@ int capture_init() {
 
 int capture_terminate() {
     capture_running = false;
-    pthread_join(capture_thread, NULL);
-    if (use_vsync_thread) {
+
+    if (capture_thread != NULL) {
+        pthread_join(capture_thread, NULL);
+    }
+
+    if (use_vsync_thread && vsync_thread != NULL) {
         pthread_join(vsync_thread, NULL);
     }
+
+    DILE_VT_Stop(vth);
+
     return 0;
 }
 
 int capture_cleanup() {
-    DILE_VT_Destroy(vth);
+    if (vth != NULL) {
+        DILE_VT_Destroy(vth);
+    }
     return 0;
 }
 
@@ -119,24 +128,41 @@ int capture_start()
     output_state.framerate = config.fps == 0 ? 1 : 60 / config.fps;
     fprintf(stderr, "[DILE_VT] framerate divider: %d\n", output_state.framerate);
 
+    DILE_VT_WaitVsync(vth, 0, 0);
+    uint64_t t1 = getticks_us();
+    DILE_VT_WaitVsync(vth, 0, 0);
+    uint64_t t2 = getticks_us();
+
+    double fps = 1000000.0 / (t2 - t1);
+    fprintf(stderr, "[DILE_VT] frametime: %d; estimated fps before divider: %.5f\n", t2 - t1, fps);
+
     // Set framerate divider
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FRAMERATE_DIVIDE, &output_state) != 0) {
         return -4;
     }
 
-    // Set enable/freeze
+    DILE_VT_WaitVsync(vth, 0, 0);
+    t1 = getticks_us();
+    DILE_VT_WaitVsync(vth, 0, 0);
+    t2 = getticks_us();
+
+    fps = 1000000.0 / (t2 - t1);
+    fprintf(stderr, "[DILE_VT] frametime: %d; estimated fps after divider: %.5f\n", t2 - t1, fps);
+
+    // Set freeze
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &output_state) != 0) {
         return -5;
     }
 
+    // Prepare offsets table (needs to be ptr[vfbcap.numVfs][vbcap.numPlanes])
     if (DILE_VT_GetVideoFrameBufferCapability(vth, &vfbcap) != 0) {
         return -9;
     }
 
     fprintf(stderr, "[DILE_VT] vfbs: %d; planes: %d\n", vfbcap.numVfbs, vfbcap.numPlanes);
-    uint32_t** ptr = malloc(4 * vfbcap.numVfbs);
+    uint32_t** ptr = calloc(sizeof(uint32_t*), vfbcap.numVfbs);
     for (int vfb = 0; vfb < vfbcap.numVfbs; vfb++) {
-        ptr[vfb] = malloc(4 * vfbcap.numPlanes);
+        ptr[vfb] = calloc(sizeof(uint32_t), vfbcap.numPlanes);
     }
 
     vfbprop.ptr = ptr;
@@ -145,6 +171,7 @@ int capture_start()
         return -10;
     }
 
+    // TODO: check out if /dev/gfx is something we should rather use
     mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
     if (mem_fd == -1) {
         return -6;
@@ -158,6 +185,10 @@ int capture_start()
             fprintf(stderr, "[DILE_VT] vfb[%d][%d] = 0x%08x\n", vfb, plane, vfbprop.ptr[vfb][plane]);
             vfbs[vfb][plane] = (uint8_t*) mmap(0, vfbprop.stride * vfbprop.height, PROT_READ, MAP_SHARED, mem_fd, vfbprop.ptr[vfb][plane]);
         }
+    }
+
+    if (DILE_VT_Start(vth) != 0) {
+       return -12;
     }
 
     if (pthread_create (&capture_thread, NULL, capture_thread_target, NULL) != 0) {
@@ -205,6 +236,7 @@ void capture_frame() {
         imagedata_cb(vfbprop.stride / 3, vfbprop.height, vfbs[idx][0]);
     } else if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_YUV420_SEMI_PLANAR) {
         if (outbuf == NULL) {
+            // Temporary conversion buffer
             outbuf = malloc (vfbprop.width * vfbprop.height * 3);
         }
 
