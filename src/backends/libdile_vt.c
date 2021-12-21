@@ -108,9 +108,7 @@ int capture_start()
     DILE_VT_RECT region = {0, 0, config.resolution_width, config.resolution_height};
 
     if (region.width < limitation.scaleDownLimitWidth || region.height < limitation.scaleDownLimitHeight) {
-        fprintf(stderr, "[DILE_VT] scaledown limit, overriding to %dx%d\n", limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight);
-        region.width = limitation.scaleDownLimitWidth;
-        region.height = limitation.scaleDownLimitHeight;
+        fprintf(stderr, "[DILE_VT] WARNING: scaledown is limited to %dx%d while %dx%d has been chosen - there's a chance this will crash!\n", limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight, region.width, region.height);
     }
 
     if (DILE_VT_SetVideoFrameOutputDeviceOutputRegion(vth, DILE_VT_DISPLAY_OUTPUT, &region) != 0) {
