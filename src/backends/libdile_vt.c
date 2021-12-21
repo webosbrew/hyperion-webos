@@ -11,6 +11,7 @@
 
 #include <libyuv.h>
 #include <dile_vt.h>
+#include <gm.h>
 
 #include "common.h"
 
@@ -31,6 +32,8 @@ DILE_VT_HANDLE vth = NULL;
 DILE_OUTPUTDEVICE_STATE output_state;
 DILE_VT_FRAMEBUFFER_PROPERTY vfbprop;
 DILE_VT_FRAMEBUFFER_CAPABILITY vfbcap;
+
+GM_SURFACE gm_surface;
 
 uint8_t*** vfbs;
 int mem_fd = 0;
@@ -71,6 +74,8 @@ int capture_terminate() {
     if (use_vsync_thread && vsync_thread != NULL) {
         pthread_join(vsync_thread, NULL);
     }
+
+    GM_DestroySurface(gm_surface.surfaceID);
 
     DILE_VT_Stop(vth);
 
@@ -187,6 +192,10 @@ int capture_start()
         }
     }
 
+    if (GM_CreateSurface(region.width, region.height, 0, &gm_surface) != 0) {
+        return -13;
+    }
+
     if (DILE_VT_Start(vth) != 0) {
        return -12;
     }
@@ -205,6 +214,15 @@ int capture_start()
 uint64_t framecount = 0;
 uint64_t start_time = 0;
 uint32_t idx = 0;
+
+void dump_buffer(uint8_t* buf, uint64_t size, uint32_t idx, uint32_t plane) {
+    char filename[256];
+    snprintf(filename, sizeof(filename), "/tmp/hyperion-webos-dump.%03d.%03d.raw", idx, plane);
+    FILE* fd = fopen(filename, "wb");
+    fwrite(buf, size, 1, fd);
+    fclose(fd);
+    fprintf(stderr, "[DILE_VT] Dumped buffer to: %s\n", filename);
+}
 
 void capture_frame() {
     static uint8_t* outbuf = NULL;
@@ -233,7 +251,45 @@ void capture_frame() {
 
     if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_RGB) {
         // Note: vfbprop.width is equal to stride for some reason.
-        imagedata_cb(vfbprop.stride / 3, vfbprop.height, vfbs[idx][0]);
+        uint32_t width = vfbprop.stride / 3;
+        uint32_t height = vfbprop.height;
+
+        uint32_t gmwidth = width;
+        uint32_t gmheight = height;
+
+        static uint8_t* argbvideo = NULL;
+        static uint8_t* argbblended = NULL;
+        static uint8_t* argbui = NULL;
+
+        if (argbvideo == NULL) {
+            argbvideo = malloc(4 * width * height);
+        }
+
+        if (argbblended == NULL) {
+            argbblended = malloc(4 * width * height);
+        }
+
+        if (argbui == NULL) {
+            argbui = malloc(4 * width * height);
+        }
+
+        if (outbuf == NULL) {
+            // Temporary conversion buffer
+            outbuf = malloc(3 * width * height);
+        }
+
+        uint64_t t1 = getticks_us();
+        GM_CaptureGraphicScreen(gm_surface.surfaceID, &gmwidth, &gmheight);
+        ABGRToARGB(gm_surface.framebuffer, 4 * width, argbui, 4 * width, width, height);
+        RGB24ToARGB(vfbs[idx][0], vfbprop.stride, argbvideo, 4 * width, width, height);
+        ARGBBlend(argbui, 4 * width, argbvideo, 4 * width, argbblended, 4 * width, width, height);
+        ARGBToRGB24(argbblended, 4 * width, outbuf, 3 * width, width, height);
+        imagedata_cb(width, height, outbuf);
+        uint64_t t7 = getticks_us();
+
+        if (framecount % 15 == 0) {
+            fprintf(stderr, "[DILE_VT] frame feed time: %.3fms\n", (t7 - t1) / 1000.0);
+        }
     } else if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_YUV420_SEMI_PLANAR) {
         if (outbuf == NULL) {
             // Temporary conversion buffer
@@ -245,12 +301,7 @@ void capture_frame() {
     } else {
         fprintf(stderr, "[DILE_VT] Unsupported pixel format: %d\n", vfbprop.pixelFormat);
         for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
-            char filename[256];
-            snprintf(filename, sizeof(filename), "/tmp/hyperion-webos-dump.%03d.%03d.raw", idx, plane);
-            FILE* fd = fopen(filename, "wb");
-            fwrite(vfbs[idx][plane], vfbprop.stride * vfbprop.height, 1, fd);
-            fclose(fd);
-            fprintf(stderr, "[DILE_VT] Dumped buffer to: %s\n", filename);
+            dump_buffer(vfbs[idx][plane], vfbprop.stride * vfbprop.height, idx, plane);
         }
     }
 
