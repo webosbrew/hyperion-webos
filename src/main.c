@@ -29,6 +29,22 @@
         return -2;                                                  \
     }
 
+static struct option long_options[] = {
+    {"width", required_argument, 0, 'x'},
+    {"height", required_argument, 0, 'y'},
+    {"address", required_argument, 0, 'a'},
+    {"port", required_argument, 0, 'p'},
+    {"fps", required_argument, 0, 'f'},
+    {"no-video", no_argument, 0, 'V'},
+    {"no-gui", no_argument, 0, 'G'},
+    {"no-service", no_argument, 0, 'S'},
+    {"backend", required_argument, 0, 'b'},
+    {"help", no_argument, 0, 'h'},
+    {"config", required_argument, 0, 'c'},
+    {"save-conf", required_argument, 0, 's'},
+    {0, 0, 0, 0},
+};
+
 pthread_t capture_thread;
 
 // Main loop for aliving background service
@@ -66,16 +82,18 @@ bool rooted = false;
 bool app_quit = false;
 bool exitme = false;
 bool isrunning = false;
+bool initialized = false;
 
 static const char *_backend = "";
 static const char *_address = "";
+static const char *_configpath= "";
+static const char *conffile = "config.json"; //default name using for webOS-Service
 static int _port = 19400;
 static bool autostart = false;
 
-static cap_backend_config_t config = {0, 0, 192, 108};
+static cap_backend_config_t config = {0, 0, 360, 180, 0, 0, 0};
 static cap_backend_funcs_t backend = {NULL};
 
-static char* conffile = "config.json";
 
 static int image_data_cb(int width, int height, uint8_t *rgb_data);
 int capture_main();
@@ -280,92 +298,247 @@ static void handle_signal(int signal)
     }
 }
 
+static void print_usage()
+{
+    printf("Usage: hyperion-webos -a ADDRESS -S [OPTION]...\n");
+    printf("\n");
+    printf("Grab screen content continously and send to Hyperion via flatbuffers server.\n");
+    printf("Application has to be named to hyperion-webos to avoid bugs!\n");
+    printf("\n");
+    printf("  -S, --no-service      Run this from CLI and not as webOS-Service\n");
+    printf("  -x, --width=WIDTH     Width of video frame (default 192)\n");
+    printf("  -y, --height=HEIGHT   Height of video frame (default 108)\n");
+    printf("  -a, --address=ADDR    IP address of Hyperion server\n");
+    printf("  -p, --port=PORT       Port of Hyperion flatbuffers server (default 19400)\n");
+    printf("  -f, --fps=FPS         Framerate for sending video frames (default 0 = unlimited)\n");
+    printf("  -b, --backend=BE      Use specific backend (default auto)\n");
+    printf("  -V, --no-video        Video will not be captured\n");
+    printf("  -G, --no-gui          GUI/UI will not be captured\n");
+    printf("  -c, --config=PATH     Absolute path for configfile to load settings. Giving additional runtime arguments will overwrite loaded ones.\n");
+    printf("  -s, --save-conf=PATH  Saving configfile to given path.\n");
+    
+}
+
+static int parse_options(int argc, char *argv[])
+{
+    PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Starting parsing arguments..");
+    PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Setting default settings before parsing..");
+    if(setDefault() != 0){
+        PmLogError(logcontext, "FNCPARSEOPT", 0, "Error while setting default settings!");
+    }
+    int opt, longindex;
+    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:h:c:s:SVG", long_options, &longindex)) != -1)
+    {
+        switch (opt)
+        {
+        case 'x':
+            config.resolution_width = atoi(optarg);
+            break;
+        case 'y':
+            config.resolution_height = atoi(optarg);
+            break;
+        case 'a':
+            _address = strdup(optarg);
+            break;
+        case 'p':
+            _port = atol(optarg);
+            break;
+        case 'f':
+            config.fps = atoi(optarg);
+            break;
+        case 'V':
+            config.no_video = 1;
+            break;
+        case 'G':
+            config.no_gui = 1;
+            break;
+        case 'S':
+            config.no_service = 1;
+            break;
+        case 'b':
+            _backend = strdup(optarg);
+            break;
+        case 'c':
+            config.load_config = 1;
+            _configpath = strdup(optarg);
+            break;
+        case 's':
+            config.save_config = 1;
+            _configpath = strdup(optarg);
+            break;
+        case 'h':
+        default:
+            print_usage();
+            return 1;
+        }
+    }
+
+    if (config.no_service == 1){
+        if (config.load_config == 1){
+            PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Loading settings from disk to runtime..");
+            if(loadSettings() != 0){
+                PmLogError(logcontext, "FNCPARSEOPT", 0, "Error while loading settings!");
+            }
+            PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Finished loading settings.");
+        }
+
+        if (config.save_config == 1){
+            jvalue_ref tosave = {0};
+
+            PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Creating JSON-String to save..");
+            tosave = jobject_create();
+            jobject_set(tosave, j_cstr_to_buffer("address"), jstring_create(_address));
+            jobject_set(tosave, j_cstr_to_buffer("port"), jnumber_create_i32(_port));
+            jobject_set(tosave, j_cstr_to_buffer("width"), jnumber_create_i32(config.resolution_width));
+            jobject_set(tosave, j_cstr_to_buffer("height"), jnumber_create_i32(config.resolution_height));
+            jobject_set(tosave, j_cstr_to_buffer("fps"), jnumber_create_i32(config.fps));
+            jobject_set(tosave, j_cstr_to_buffer("backend"), jstring_create(_backend));
+            jobject_set(tosave, j_cstr_to_buffer("novideo"), jboolean_create(config.no_video));
+            jobject_set(tosave, j_cstr_to_buffer("nogui"), jboolean_create(config.no_gui));
+            jobject_set(tosave, j_cstr_to_buffer("autostart"), jboolean_create(autostart));
+            
+            PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Saving JSON-String to disk..");
+
+            if(saveSettings(jvalue_tostring_simple(tosave)) != 0){
+                PmLogError(logcontext, "FNCPARSEOPT", 0, "Error while saveing settings to disk!");
+            }
+            j_release(&tosave);
+            PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Finished saving settings.");
+        }
+
+
+        if (_address == "")
+        {
+            PmLogError(logcontext, "FNCPARSEOPT", 0, "Error! Address not specified.\n");
+            print_usage();
+            return 1;
+        }
+        if (config.fps < 0 || config.fps > 60)
+        {
+            PmLogError(logcontext, "FNCPARSEOPT", 0, "Error! FPS should between 0 (unlimited) and 60.\n");
+            print_usage();
+            return 1;
+        }
+        if (config.fps == 0)
+            config.framedelay_us = 0;
+        else
+            config.framedelay_us = 1000000 / config.fps;
+    }
+    PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Finished parsing arguments.");
+    return 0;
+}
+
+
 int main(int argc, char *argv[])
 {
     PmLogGetContext("hyperion-webos_service", &logcontext);
     PmLogInfo(logcontext, "FNCMAIN", 0, "Service main starting..");
-
-    LSError lserror;
-    LSHandle  *handle = NULL;
-    bool bRetVal = FALSE;
     signal(SIGINT, handle_signal);
-    LSErrorInit(&lserror);
 
-    // create a GMainLoop
-    gmainLoop = g_main_loop_new(NULL, FALSE);
-
-    bRetVal = LSRegister(SERVICE_NAME, &handle, &lserror);
-    if (FALSE== bRetVal) {
-        LSErrorFree( &lserror );
-        return 0;
-    }
-    sh = LSMessageGetConnection(message);
-
-    LSRegisterCategory(handle,"/",lunaMethods, NULL, NULL, &lserror);
-
-    LSGmainAttach(handle, gmainLoop, &lserror);
-
-    PmLogInfo(logcontext, "FNCMAIN", 0, "Checking service root status..");
-    if(checkRoot(handle) != 0){
-        PmLogError(logcontext, "FNCMAIN", 0, "Error while checking for root status!");
+    int ret;
+    if ((ret = parse_options(argc, argv)) != 0)
+    {
+        return ret;
     }
 
-    PmLogInfo(logcontext, "FNCMAIN", 0, "Setting default settings before loading..");
-    if(setDefault() != 0){
-        PmLogError(logcontext, "FNCMAIN", 0, "Error while setting default settings!");
-    }
+    if(config.no_service == 1){
 
-    PmLogInfo(logcontext, "FNCMAIN", 0, "Loading settings from disk to runtime..");
-    if(loadSettings() != 0){
-        PmLogError(logcontext, "FNCMAIN", 0, "Error while loading settings!");
-    }
-
-    if(autostart && !rooted){
-        PmLogError(logcontext, "FNCMAIN", 0, "Service isn't rooted! Setting autostart to false.");
-        autostart = false;
-    }
-
-    if(autostart){
-        if (isrunning){
-            PmLogError(logcontext, "FNCMAIN", 0,  "Capture already running");
-            goto skip;
+        if (getenv("XDG_RUNTIME_DIR") == NULL)
+        {
+            setenv("XDG_RUNTIME_DIR", "/tmp/xdg", 1);
         }
-
-        //Ensure set before starting
-        if (_address == "" || _backend == "" || config.fps < 0 || config.fps > 60){
-            PmLogError(logcontext, "FNCMAIN", 0, "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60! | Address: %s | Backend: %s | FPS: %d", _address, _backend, config.fps);
-            goto skip;
-        }
-
-        if (config.fps == 0){
-            config.framedelay_us = 0;
-        }else{
-            config.framedelay_us = 1000000 / config.fps;
-        }
-
-        PmLogInfo(logcontext, "FNCMAIN", 0, "Using these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d | Autostart: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui, autostart);
-        PmLogInfo(logcontext, "FNCMAIN", 0,  "Calling capture start main..");
 
         if ((capture_main()) != 0){
-            PmLogError(logcontext, "FNCMAIN", 0,  "ERROR: Capture main init failed!");
-            goto skip;
+            PmLogError(logcontext, "FNCSTART", 0,  "ERROR: Capture main init failed!");
+            return 1;
+        }
+        return ret;
+
+    }else{
+
+        LSError lserror;
+        LSHandle  *handle = NULL;
+        bool bRetVal = FALSE;
+        
+        LSErrorInit(&lserror);
+
+        // create a GMainLoop
+        gmainLoop = g_main_loop_new(NULL, FALSE);
+
+        bRetVal = LSRegister(SERVICE_NAME, &handle, &lserror);
+        if (FALSE== bRetVal) {
+            LSErrorFree( &lserror );
+            return 0;
+        }
+        sh = LSMessageGetConnection(message);
+
+        LSRegisterCategory(handle,"/",lunaMethods, NULL, NULL, &lserror);
+
+        LSGmainAttach(handle, gmainLoop, &lserror);
+
+        PmLogInfo(logcontext, "FNCMAIN", 0, "Checking service root status..");
+        if(checkRoot(handle) != 0){
+            PmLogError(logcontext, "FNCMAIN", 0, "Error while checking for root status!");
         }
 
+        PmLogInfo(logcontext, "FNCMAIN", 0, "Setting default settings before loading..");
+        if(setDefault() != 0){
+            PmLogError(logcontext, "FNCMAIN", 0, "Error while setting default settings!");
+        }
+
+        PmLogInfo(logcontext, "FNCMAIN", 0, "Loading settings from disk to runtime..");
+        if(loadSettings() != 0){
+            PmLogError(logcontext, "FNCMAIN", 0, "Error while loading settings!");
+        }
+
+        if(autostart && !rooted){
+            PmLogError(logcontext, "FNCMAIN", 0, "Service isn't rooted! Setting autostart to false.");
+            autostart = false;
+        }
+
+        if(autostart){
+            if (isrunning){
+                PmLogError(logcontext, "FNCMAIN", 0,  "Capture already running");
+                goto skip;
+            }
+
+            //Ensure set before starting
+            if (_address == "" || _backend == "" || config.fps < 0 || config.fps > 60){
+                PmLogError(logcontext, "FNCMAIN", 0, "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60! | Address: %s | Backend: %s | FPS: %d", _address, _backend, config.fps);
+                goto skip;
+            }
+
+            if (config.fps == 0){
+                config.framedelay_us = 0;
+            }else{
+                config.framedelay_us = 1000000 / config.fps;
+            }
+
+            PmLogInfo(logcontext, "FNCMAIN", 0, "Using these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d | Autostart: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui, autostart);
+            PmLogInfo(logcontext, "FNCMAIN", 0,  "Calling capture start main..");
+
+            if ((capture_main()) != 0){
+                PmLogError(logcontext, "FNCMAIN", 0,  "ERROR: Capture main init failed!");
+                goto skip;
+            }
+
+        }
+
+        skip:
+            PmLogInfo(logcontext, "FNCMAIN", 0, "Going into main loop..");
+            // run to check continuously for new events from each of the event sources
+            g_main_loop_run(gmainLoop);
+            // Decreases the reference count on a GMainLoop object by one
+            g_main_loop_unref(gmainLoop);
+
+            PmLogInfo(logcontext, "FNCMAIN", 0, "Service main finishing..");
+
     }
-
-    skip:
-        PmLogInfo(logcontext, "FNCMAIN", 0, "Going into main loop..");
-        // run to check continuously for new events from each of the event sources
-        g_main_loop_run(gmainLoop);
-        // Decreases the reference count on a GMainLoop object by one
-        g_main_loop_unref(gmainLoop);
-
-        PmLogInfo(logcontext, "FNCMAIN", 0, "Service main finishing..");
-        return 0;
+    return 0;
 }
 
 int capture_main(){
-
+    initialized = false;
     PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Beginning capture main init..");
     PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Detecting backend..");
     if ((detect_backend()) != 0)
@@ -408,7 +581,7 @@ int capture_main(){
         return -1;
     }
     PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Capture main init completed. Creating subproccess for looping..");
-
+    initialized = true;
     app_quit = false;
     isrunning = true;
     if (pthread_create(&capture_thread, NULL, capture_loop, NULL) != 0) {
@@ -447,9 +620,12 @@ int cleanup(){
     }
     PmLogInfo(logcontext, "FNCCLEAN", 0, "Destroying hyperion-client..");
     hyperion_destroy();
-    if (backend.capture_terminate) {
-        PmLogInfo(logcontext, "FNCCLEAN", 0, "Terminating capture within library..");
-        backend.capture_terminate();
+    if(initialized){
+        if (backend.capture_terminate) {
+            PmLogInfo(logcontext, "FNCCLEAN", 0, "Terminating capture within library..");
+            backend.capture_terminate();
+            initialized = false;
+        }
     }
     if (backend.capture_cleanup) {
         PmLogInfo(logcontext, "FNCCLEAN", 0, "Cleanup capture within library..");
@@ -480,8 +656,12 @@ int loadSettings(){
     
 
     PmLogInfo(logcontext, "FNCLOADCFG", 0,  "Try to read configfile.");
-    getstartingpath(confpath);
-    strcat(confpath, conffile);
+    if(_configpath == ""){
+        getstartingpath(confpath);
+        strcat(confpath, conffile);
+    }else{
+        strcat(confpath, _configpath);
+    }
     FILE *jconf = fopen(confpath,"r");
     if(jconf){
         fseek(jconf, 0, SEEK_END);
@@ -590,8 +770,12 @@ int saveSettings(const char *savestring){
     char confpath[FILENAME_MAX];
 
     PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Try to save configfile.");
-    getstartingpath(confpath);
-    strcat(confpath, conffile);
+    if(_configpath == ""){
+        getstartingpath(confpath);
+        strcat(confpath, conffile);
+    }else{
+        strcat(confpath, _configpath);
+    }
     FILE *jconf = fopen(confpath,"w+");
     if(jconf){
         PmLogInfo(logcontext, "FNCSAVECFG", 0,  "File opened, writing JSON..");
@@ -825,6 +1009,7 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
     jobject_set(jobj, j_cstr_to_buffer("novideo"), jboolean_create(config.no_video));
     jobject_set(jobj, j_cstr_to_buffer("nogui"), jboolean_create(config.no_gui));
     jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
+    jobject_set(jobj, j_cstr_to_buffer("autostart"), jboolean_create(autostart));
 
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 

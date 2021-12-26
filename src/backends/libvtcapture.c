@@ -89,7 +89,6 @@ cap_imagedata_callback_t imagedata_cb = NULL;
 // Prototypes
 int vtcapture_initialize();
 int capture_start();
-int capture_stop();
 int capture_stop_hal();
 int capture_stop_vt();
 int capture_cleanup();
@@ -120,7 +119,11 @@ int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback
     props.loc = loc;
     props.reg = resolution;
     props.buf_cnt = buf_cnt;
-    props.frm = config.fps;
+    if(config.fps == 0){
+        props.frm = 120;
+    }else{
+        props.frm = config.fps;
+    }
     
     //Halgal
     settings.srcblending1 = 2; //default = 2(1-10 possible) - blend? setting
@@ -307,7 +310,7 @@ int vtcapture_initialize(){
                 size1 = buff.size1;
             }else if (innerdone != 2){
                 PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_currentCaptureBuffInfo failed: %x Quitting...", innerdone);
-                capture_stop();
+                capture_terminate();
                 return -1;
             }
             cnter++;
@@ -399,7 +402,7 @@ int capture_terminate()
     capture_run = false;
     pthread_join(capture_thread, NULL);
 
-    if(config.no_video != 1){
+    if(config.no_video != 1 && vtcapture_initialized){
         PmLogInfo(logcontext, "VTCCPTTERM", 0, "Video capture enabled - Also stopping..");
         done += capture_stop_vt();
     }
@@ -408,22 +411,26 @@ int capture_terminate()
         done += capture_stop_hal();
     }
 
-    done = vtCapture_postprocess(driver, client);
-    if (done == 0){
-        PmLogInfo(logcontext, "VTCCPTTERM", 0, "vtCapture_postprocess done!");
-        done = vtCapture_finalize(driver, client);
-        if (done == 0) {
-            PmLogInfo(logcontext, "VTCCPTTERM", 0, "vtCapture_finalize done!");
-            vtCapture_release(driver);
-            PmLogInfo(logcontext, "VTCCPTTERM", 0, "Driver released!");
-            memset(&client,0,127);
-            PmLogInfo(logcontext, "VTCCPTTERM", 0, "Finished capture termination!");
-            return 0;
+    if(config.no_video != 1){
+        if (vtcapture_initialized) {
+            done = vtCapture_postprocess(driver, client);
+            if (done == 0){
+                PmLogInfo(logcontext, "VTCCPTTERM", 0, "vtCapture_postprocess done!");
+                done = vtCapture_finalize(driver, client);
+                if (done == 0) {
+                    PmLogInfo(logcontext, "VTCCPTTERM", 0, "vtCapture_finalize done!");
+                    vtCapture_release(driver);
+                    PmLogInfo(logcontext, "VTCCPTTERM", 0, "Driver released!");
+                    memset(&client,0,127);
+                    PmLogInfo(logcontext, "VTCCPTTERM", 0, "Finished capture termination!");
+                    return 0;
+                }
+                PmLogError(logcontext, "VTCCPTTERM", 0, "vtCapture_finalize failed: %x", done);
+            }
+            vtCapture_finalize(driver, client);
         }
-        PmLogError(logcontext, "VTCCPTTERM", 0, "vtCapture_finalize failed: %x", done);
+        vtCapture_release(driver);
     }
-    vtCapture_finalize(driver, client);
-    vtCapture_release(driver);
     PmLogError(logcontext, "VTCCPTTERM", 0, "Finishing with errors: %x!", done);
     return -1;
 }
@@ -456,7 +463,7 @@ void capture_frame()
     if(config.no_gui != 1){
         if ((indone = HAL_GAL_CaptureFrameBuffer(&surfaceInfo)) != 0) {
             PmLogError(logcontext, "VTCCPTFRAME", 0, "HAL_GAL_CaptureFrameBuffer failed: %x", indone);
-            capture_stop();
+            capture_terminate();
             return;
         }
         memcpy(hal,addr,len);
@@ -499,20 +506,24 @@ void send_picture()
 {
 //    fprintf(stderr, "[Client] hyperion_set_image\n");
     if (vtcapture_initialized || (config.no_video == 1 && config.no_gui != 1)){
-        imagedata_cb(stride, resolution.h, rgb);
+        imagedata_cb(stride, resolution.h, rgb); //GUI /GUI+VT /VT
     } else {
-        imagedata_cb(stride2, resolution.h, rgb2);
+        imagedata_cb(stride2, resolution.h, rgb2); //GUI+VT_notReady
 
         if (config.no_video != 1 && vtfrmcnt > 200){
             vtfrmcnt = 0;
             PmLogInfo(logcontext, "VTCSENDPIC", 0, "Try to init vtcapture again..");
             if (vtcapture_initialize() == 0){
-                PmLogInfo(logcontext, "VTCSENDPIC", 0, "Init possible. Need to implement cleanup and reset, skipping..");
-                //TODO: Implement cleanup and restart of vtcapture
-                //restart = true;
-                //app_quit = true;
-                vtcapture_initialized = false;
-                vtfrmcnt = 0;
+                vtcapture_initialized = true;
+                PmLogInfo(logcontext, "VTCSENDPIC", 0, "Init possible. Terminating current capture..");
+                capture_terminate();
+                PmLogInfo(logcontext, "VTCSENDPIC", 0, "Init possible. Cleanup current capture..");
+                capture_cleanup();
+                PmLogInfo(logcontext, "VTCSENDPIC", 0, "Init possible. Init capture..");
+                capture_init();
+                PmLogInfo(logcontext, "VTCSENDPIC", 0, "Init possible. Starting capture again..");
+                capture_start();
+                return;
             }
         }
         vtfrmcnt++;
