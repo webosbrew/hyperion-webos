@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 
+#include <libyuv.h>
 #include <dile_vt.h>
 
 #include "common.h"
@@ -19,8 +20,8 @@
 cap_backend_config_t config = {0, 0, 0, 0};
 cap_imagedata_callback_t imagedata_cb = NULL;
 
-pthread_t capture_thread;
-pthread_t vsync_thread;
+pthread_t capture_thread = NULL;
+pthread_t vsync_thread = NULL;
 
 pthread_mutex_t vsync_lock;
 pthread_cond_t vsync_cond;
@@ -70,16 +71,24 @@ int capture_init() {
 int capture_terminate() {
     PmLogInfo(logcontext, "DILETERM", 0, "Capture termination called.");
     capture_running = false;
-    pthread_join(capture_thread, NULL);
-    if (use_vsync_thread) {
+
+    if (capture_thread != NULL) {
+        pthread_join(capture_thread, NULL);
+    }
+
+    if (use_vsync_thread && vsync_thread != NULL) {
         pthread_join(vsync_thread, NULL);
     }
+
+    DILE_VT_Stop(vth);
+
     return 0;
 }
 
 int capture_cleanup() {
-    PmLogInfo(logcontext, "DILECLEAN", 0, "Capture cleanup called.");
-    DILE_VT_Destroy(vth);
+    if (vth != NULL) {
+        DILE_VT_Destroy(vth);
+    }
     return 0;
 }
 
@@ -108,9 +117,7 @@ int capture_start()
     DILE_VT_RECT region = {0, 0, config.resolution_width, config.resolution_height};
 
     if (region.width < limitation.scaleDownLimitWidth || region.height < limitation.scaleDownLimitHeight) {
-        PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] scaledown limit, overriding to %dx%d\n", limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight);
-        region.width = limitation.scaleDownLimitWidth;
-        region.height = limitation.scaleDownLimitHeight;
+        fprintf(stderr, "[DILE_VT] WARNING: scaledown is limited to %dx%d while %dx%d has been chosen - there's a chance this will crash!\n", limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight, region.width, region.height);
     }
 
     if (DILE_VT_SetVideoFrameOutputDeviceOutputRegion(vth, DILE_VT_DISPLAY_OUTPUT, &region) != 0) {
@@ -128,24 +135,41 @@ int capture_start()
     output_state.framerate = config.fps == 0 ? 1 : 60 / config.fps;
     PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] framerate divider: %d\n", output_state.framerate);
 
+    DILE_VT_WaitVsync(vth, 0, 0);
+    uint64_t t1 = getticks_us();
+    DILE_VT_WaitVsync(vth, 0, 0);
+    uint64_t t2 = getticks_us();
+
+    double fps = 1000000.0 / (t2 - t1);
+    fprintf(stderr, "[DILE_VT] frametime: %d; estimated fps before divider: %.5f\n", t2 - t1, fps);
+
     // Set framerate divider
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FRAMERATE_DIVIDE, &output_state) != 0) {
         return -4;
     }
 
-    // Set enable/freeze
+    DILE_VT_WaitVsync(vth, 0, 0);
+    t1 = getticks_us();
+    DILE_VT_WaitVsync(vth, 0, 0);
+    t2 = getticks_us();
+
+    fps = 1000000.0 / (t2 - t1);
+    fprintf(stderr, "[DILE_VT] frametime: %d; estimated fps after divider: %.5f\n", t2 - t1, fps);
+
+    // Set freeze
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &output_state) != 0) {
         return -5;
     }
 
+    // Prepare offsets table (needs to be ptr[vfbcap.numVfs][vbcap.numPlanes])
     if (DILE_VT_GetVideoFrameBufferCapability(vth, &vfbcap) != 0) {
         return -9;
     }
 
-    PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] vfbs: %d; planes: %d\n", vfbcap.numVfbs, vfbcap.numPlanes);
-    uint32_t** ptr = malloc(4 * vfbcap.numVfbs);
+    fprintf(stderr, "[DILE_VT] vfbs: %d; planes: %d\n", vfbcap.numVfbs, vfbcap.numPlanes);
+    uint32_t** ptr = calloc(sizeof(uint32_t*), vfbcap.numVfbs);
     for (int vfb = 0; vfb < vfbcap.numVfbs; vfb++) {
-        ptr[vfb] = malloc(4 * vfbcap.numPlanes);
+        ptr[vfb] = calloc(sizeof(uint32_t), vfbcap.numPlanes);
     }
 
     vfbprop.ptr = ptr;
@@ -154,6 +178,7 @@ int capture_start()
         return -10;
     }
 
+    // TODO: check out if /dev/gfx is something we should rather use
     mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
     if (mem_fd == -1) {
         return -6;
@@ -167,6 +192,10 @@ int capture_start()
             PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] vfb[%d][%d] = 0x%08x\n", vfb, plane, vfbprop.ptr[vfb][plane]);
             vfbs[vfb][plane] = (uint8_t*) mmap(0, vfbprop.stride * vfbprop.height, PROT_READ, MAP_SHARED, mem_fd, vfbprop.ptr[vfb][plane]);
         }
+    }
+
+    if (DILE_VT_Start(vth) != 0) {
+       return -12;
     }
 
     if (pthread_create (&capture_thread, NULL, capture_thread_target, NULL) != 0) {
@@ -186,6 +215,8 @@ uint64_t start_time = 0;
 uint32_t idx = 0;
 
 void capture_frame() {
+    static uint8_t* outbuf = NULL;
+
     if (use_vsync_thread) {
         pthread_mutex_lock(&vsync_lock);
         pthread_cond_wait(&vsync_cond, &vsync_lock);
@@ -211,6 +242,14 @@ void capture_frame() {
     if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_RGB) {
         // Note: vfbprop.width is equal to stride for some reason.
         imagedata_cb(vfbprop.stride / 3, vfbprop.height, vfbs[idx][0]);
+    } else if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_YUV420_SEMI_PLANAR) {
+        if (outbuf == NULL) {
+            // Temporary conversion buffer
+            outbuf = malloc (vfbprop.width * vfbprop.height * 3);
+        }
+
+        NV21ToRGB24(vfbs[idx][0], vfbprop.stride, vfbs[idx][1], vfbprop.stride, outbuf, vfbprop.width * 3, vfbprop.width, vfbprop.height);
+        imagedata_cb(vfbprop.width, vfbprop.height, outbuf);
     } else {
         PmLogError(logcontext, "DILECPTFRM", 0, "[DILE_VT] Unsupported pixel format: %d\n", vfbprop.pixelFormat);
         for (int plane = 0; plane < vfbcap.numPlanes; plane++) {

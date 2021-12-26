@@ -1,3 +1,6 @@
 [submodule "tv-native-apis"]
 	path = tv-native-apis
 	url = https://github.com/webosbrew/tv-native-apis.git
+[submodule "libyuv"]
+	path = libyuv
+	url = https://chromium.googlesource.com/libyuv/libyuv
