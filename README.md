@@ -11,12 +11,13 @@ the network.
 
 Based on reverse-engineered internal system APIs. Still highly experimental.
 
-If you are looking for a user-friendly UI that ships this piece of software check [PiCap](https://github.com/TBSniller/piccap).
+If you are looking for a user-friendly UI that ships this piece of software check [PicCap](https://github.com/TBSniller/piccap). This application mainly is the underlaying service for this software.
 
 ## Known issues
 * `libvt`: may cause flickering or "No Signal" until reboot
 * Everything is based on highly platform-specific reverse-engineered internal
   system APIs. Standard no-warranty clauses apply.
+* Binary has to be named "hyperion-webos" because of hard coded path calculation - doesn't got it better yet
 
 ## Backends
 This software uses multiple capture backends, that may work differently on some
@@ -37,8 +38,8 @@ the TV, eg. into `/tmp` directory.
 
 ```sh
 cd /tmp
-LD_LIBRARY_PATH=. ./hyperion-webos --help
-LD_LIBRARY_PATH=. ./hyperion-webos -b libdile_vt -a 10.0.0.1
+./hyperion-webos --help
+./hyperion-webos -S -b libdile_vt -a 10.0.0.1
 ```
 
 ## Issues reporting
