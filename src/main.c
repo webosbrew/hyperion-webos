@@ -8,6 +8,9 @@
 #include <signal.h>
 #include <pthread.h>
 #include <dlfcn.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "common.h"
 #include "hyperion_client.h"
 #include <glib.h>
@@ -517,8 +520,18 @@ int main(int argc, char *argv[])
             PmLogInfo(logcontext, "FNCMAIN", 0, "Using these values: Address: %s | Port: %d | Width: %d | Height: %d | FPS: %d | Backend: %s | NoVideo: %d | NoGUI: %d | Autostart: %d", _address, _port, config.resolution_width, config.resolution_height, config.fps, _backend, config.no_video, config.no_gui, autostart);
             PmLogInfo(logcontext, "FNCMAIN", 0,  "Calling capture start main..");
 
+            //luna-send -a org.webosbrew.piccap -f -n 1 luna://com.webos.notification/createToast '{"sourceId":"org.webosbrew.piccap","message": "PicCap startup is enabled! Calling service for startup.."}'
+            if(!LSCall(handle, "luna://com.webos.notification/createToast","{\"sourceId\":\"org.webosbrew.piccap\",\"message\": \"PicCap startup is enabled! Calling service for startup..\"}", NULL, NULL, NULL, &lserror)){
+                PmLogError(logcontext, "FNCMAIN", 0, "Error while executing toast notification!");
+                LSErrorPrint(&lserror, stderr);
+            }
+
             if ((capture_main()) != 0){
                 PmLogError(logcontext, "FNCMAIN", 0,  "ERROR: Capture main init failed!");
+                if(!LSCall(handle, "luna://com.webos.notification/createToast","{\"sourceId\":\"org.webosbrew.piccap\",\"message\": \"Error while executing PicCap-Startup!\"}", NULL, NULL, NULL, &lserror)){
+                    PmLogError(logcontext, "FNCMAIN", 0, "Error while executing toast notification!");
+                    LSErrorPrint(&lserror, stderr);
+                }
                 goto skip;
             }
 
@@ -768,6 +781,7 @@ bool getSettings(LSHandle *sh, LSMessage *message, void *data)
 
 int saveSettings(const char *savestring){
     char confpath[FILENAME_MAX];
+    int retvalue = 0;
 
     PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Try to save configfile.");
     if(_configpath == ""){
@@ -781,12 +795,38 @@ int saveSettings(const char *savestring){
         PmLogInfo(logcontext, "FNCSAVECFG", 0,  "File opened, writing JSON..");
         fwrite(savestring, 1, strlen(savestring), jconf);
         fclose(jconf);
-        return 0;
+        retvalue = 0;
     }else{
         PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Couldn't open configfile for write at location %s", confpath);
-        return 1;
+        retvalue = 1;
     }
-    return 1;
+
+    PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Autostart: %d", autostart);
+    if (autostart){
+        PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Autostart enabled. Checking symlink.");
+        char *startpath = "/var/lib/webosbrew/init.d/piccapautostart";
+        char *startupdir = "/var/lib/webosbrew/init.d";
+        char origpath[FILENAME_MAX];
+        char *autostartfile = "piccapautostart";
+
+        getstartingpath(origpath);
+        strcat(origpath, autostartfile);
+
+        if(access(startpath, F_OK) == 0){
+            PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Autostart enabled. Symlink to HBChannel init.d already exists. Nothing to do");
+        }else{
+            PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Autostart enabled. Trying to create symlink to HBChannel init.d.");
+            mkdir(startupdir, 0755);
+            if(symlink(origpath, startpath) != 0){
+                PmLogError(logcontext, "FNCSAVECFG", 0, "Error while creating symlink!");
+                retvalue = 2;
+            }else{
+                PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Symlink created.");
+            }
+        }
+    }
+
+    return retvalue;
 }
 
 bool setSettings(LSHandle *sh, LSMessage *message, void *data)
@@ -868,18 +908,36 @@ bool setSettings(LSHandle *sh, LSMessage *message, void *data)
 
 int removeSettings(){
     char confpath[FILENAME_MAX];
+    int retval = 0;
 
     PmLogInfo(logcontext, "FNCREMCFG", 0,  "Try to delete configfile.");
     getstartingpath(confpath);
     strcat(confpath, conffile);
     if(remove(confpath) != 0){
         PmLogError(logcontext, "FNCREMCFG", 0,  "Error while deleting configfile at path %s", confpath);
-        return 1;
+        retval = 1;
     }else{
         PmLogInfo(logcontext, "FNCREMCFG", 0,  "Configfile successfully deleted at path %s", confpath);
-        return 0;
+        retval = 0;
     }
-    return 1;
+
+
+    PmLogInfo(logcontext, "FNCREMCFG", 0,  "Removing autostart symlink, if exists.");
+    char *startpath = "/var/lib/webosbrew/init.d/piccapautostart";
+
+    if(access(startpath, F_OK) != 0){
+        PmLogInfo(logcontext, "FNCREMCFG", 0,  "Symlink doesnt exists. Nothing to do");
+    }else{
+        PmLogInfo(logcontext, "FNCREMCFG", 0,  "Autostart enabled. Trying to remove symlink to HBChannel init.d.");
+        if(unlink(startpath) != 0){
+            PmLogError(logcontext, "FNCREMCFG", 0, "Error while deleting symlink!");
+            retval = 2;
+        }else{
+            PmLogInfo(logcontext, "FNCREMCFG", 0,  "Symlink removed.");
+        }
+    }
+    
+    return retval;
 }
 
 bool resetSettings(LSHandle *sh, LSMessage *message, void *data)
