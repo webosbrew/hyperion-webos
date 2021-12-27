@@ -42,6 +42,7 @@ static struct option long_options[] = {
     {"no-video", no_argument, 0, 'V'},
     {"no-gui", no_argument, 0, 'G'},
     {"no-service", no_argument, 0, 'S'},
+    {"verbose", no_argument, 0, 'v'},
     {"backend", required_argument, 0, 'b'},
     {"help", no_argument, 0, 'h'},
     {"config", required_argument, 0, 'c'},
@@ -334,7 +335,7 @@ static void print_usage()
     printf("  -G, --no-gui          GUI/UI will not be captured\n");
     printf("  -c, --config=PATH     Absolute path for configfile to load settings. Giving additional runtime arguments will overwrite loaded ones.\n");
     printf("  -s, --save-conf=PATH  Saving configfile to given path.\n");
-    
+    printf("  -v, --verbose         Verbose logging\n");
 }
 
 static int parse_options(int argc, char *argv[])
@@ -345,7 +346,7 @@ static int parse_options(int argc, char *argv[])
         PmLogError(logcontext, "FNCPARSEOPT", 0, "Error while setting default settings!");
     }
     int opt, longindex;
-    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:h:c:s:SVG", long_options, &longindex)) != -1)
+    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:h:c:s:SVGv", long_options, &longindex)) != -1)
     {
         switch (opt)
         {
@@ -372,6 +373,8 @@ static int parse_options(int argc, char *argv[])
             break;
         case 'S':
             config.no_service = 1;
+        case 'v':
+            config.verbose = 1;
             break;
         case 'b':
             _backend = strdup(optarg);

@@ -236,6 +236,12 @@ void dump_buffer(uint8_t* buf, uint64_t size, uint32_t idx, uint32_t plane) {
 
 void capture_frame() {
     static uint8_t* outbuf = NULL;
+    uint16_t t1,t7;
+    uint32_t width = vfbprop.width;
+    uint32_t height = vfbprop.height;
+    static uint8_t* argbvideo = NULL;
+    static uint8_t* argbblended = NULL;
+    static uint8_t* argbui = NULL;
 
     if (use_vsync_thread) {
         pthread_mutex_lock(&vsync_lock);
@@ -258,61 +264,71 @@ void capture_frame() {
 
     framecount += 1;
 
-
     if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_RGB) {
-        // Note: vfbprop.width is equal to stride for some reason.
-        uint32_t width = vfbprop.stride / 3;
-        uint32_t height = vfbprop.height;
+        t1 = getticks_us();
+        if (config.no_gui) {
+            outbuf = vfbs[idx][0];
+        } else {
+            if (outbuf == NULL)
+                outbuf = malloc(3 * width * height); // Temporary conversion buffer
 
-        uint32_t gmwidth = width;
-        uint32_t gmheight = height;
+            if (config.no_video) {
+                GM_CaptureGraphicScreen(gm_surface.surfaceID, &width, &height);
+                ABGRToRGB24(gm_surface.framebuffer, 4 * width, outbuf, 3 * width, width, height);
+            } else {
+                if (argbui == NULL)
+                    argbui = malloc(3 * width * height);
+                if (argbvideo == NULL)
+                    argbvideo = malloc(3 * width * height);
+                if (argbblended == NULL)
+                    argbblended = malloc(3 * width * height);
 
-        static uint8_t* argbvideo = NULL;
-        static uint8_t* argbblended = NULL;
-        static uint8_t* argbui = NULL;
-
-        if (argbvideo == NULL) {
-            argbvideo = malloc(4 * width * height);
-        }
-
-        if (argbblended == NULL) {
-            argbblended = malloc(4 * width * height);
-        }
-
-        if (argbui == NULL) {
-            argbui = malloc(4 * width * height);
-        }
-
-        if (outbuf == NULL) {
-            // Temporary conversion buffer
-            outbuf = malloc(3 * width * height);
-        }
-
-        uint64_t t1 = getticks_us();
-        GM_CaptureGraphicScreen(gm_surface.surfaceID, &gmwidth, &gmheight);
-        ABGRToARGB(gm_surface.framebuffer, 4 * width, argbui, 4 * width, width, height);
-        RGB24ToARGB(vfbs[idx][0], vfbprop.stride, argbvideo, 4 * width, width, height);
-        ARGBBlend(argbui, 4 * width, argbvideo, 4 * width, argbblended, 4 * width, width, height);
-        ARGBToRGB24(argbblended, 4 * width, outbuf, 3 * width, width, height);
-        imagedata_cb(width, height, outbuf);
-        uint64_t t7 = getticks_us();
-
-        if (framecount % 15 == 0) {
-            PmLogInfo(logcontext, "DILECPTFRM", 0, "[DILE_VT] Frame feed time: %.3fms",  (t7 - t1) / 1000.0);
+                GM_CaptureGraphicScreen(gm_surface.surfaceID, &width, &height);
+                ABGRToARGB(gm_surface.framebuffer, 4 * width, argbui, 4 * width, width, height);
+                RGB24ToARGB(vfbs[idx][0], vfbprop.stride, argbvideo, 4 * width, width, height);
+                ARGBBlend(argbui, 4 * width, argbvideo, 4 * width, argbblended, 4 * width, width, height);
+                ARGBToRGB24(argbblended, 4 * width, outbuf, 3 * width, width, height);
+            }
         }
     } else if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_YUV420_SEMI_PLANAR) {
-        if (outbuf == NULL) {
-            // Temporary conversion buffer
-            outbuf = malloc (vfbprop.width * vfbprop.height * 3);
-        }
+        if (outbuf == NULL)
+            outbuf = malloc (width * height * 3); // Temporary conversion buffer
 
-        NV21ToRGB24(vfbs[idx][0], vfbprop.stride, vfbs[idx][1], vfbprop.stride, outbuf, vfbprop.width * 3, vfbprop.width, vfbprop.height);
-        imagedata_cb(vfbprop.width, vfbprop.height, outbuf);
+        if (config.no_gui) {
+            t1 = getticks_us();
+            NV21ToRGB24(vfbs[idx][0], vfbprop.stride, vfbs[idx][1], vfbprop.stride, outbuf, width * 3, width, height);
+        } else if (config.no_video) {
+            t1 = getticks_us();
+            GM_CaptureGraphicScreen(gm_surface.surfaceID, &width, &height);
+            ABGRToRGB24(gm_surface.framebuffer, 4 * width, outbuf, 3 * width, width, height);
+        } else {
+            if (argbvideo == NULL)
+                argbvideo = malloc(3 * width * height);
+            if (argbblended == NULL)
+                argbblended = malloc(3 * width * height);
+            if (argbui == NULL)
+                argbui = malloc(3 * width * height);
+
+            t1 = getticks_us();
+            GM_CaptureGraphicScreen(gm_surface.surfaceID, &width, &height);
+            ABGRToARGB(gm_surface.framebuffer, 4 * width, argbui, 4 * width, width, height);
+            NV21ToARGB(vfbs[idx][0], vfbprop.stride, vfbs[idx][1], vfbprop.stride, argbvideo, 4 * width, width, height);
+            ARGBBlend(argbui, 4 * width, argbvideo, 4 * width, argbblended, 4 * width, width, height);
+            ARGBToRGB24(argbblended, 4 * width, outbuf, 3 * width, width, height);
+        }
     } else {
         PmLogError(logcontext, "DILECPTFRM", 0, "[DILE_VT] Unsupported pixel format: %d", vfbprop.pixelFormat);
         for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
             dump_buffer(vfbs[idx][plane], vfbprop.stride * vfbprop.height, idx, plane);
         }
+        return;
+    }
+
+    imagedata_cb(width, height, outbuf);
+    t7 = getticks_us();
+
+    if ((framecount % 15 == 0) && config.verbose) {
+        fprintf(stderr, "[DILE_VT] frame feed time: %.3fms\n", (t7 - t1) / 1000);
     }
 
     output_state.freezed = 0;
