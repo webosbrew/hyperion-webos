@@ -60,24 +60,24 @@ LSMessage *message;
 // Declare of each method
 bool start(LSHandle *sh, LSMessage *message, void *data);
 bool stop(LSHandle *sh, LSMessage *message, void *data);
-bool isRoot(LSHandle *sh, LSMessage *message, void *data);
-bool isRunning(LSHandle *sh, LSMessage *message, void *data);
-bool getSettings(LSHandle *sh, LSMessage *message, void *data);
-bool setSettings(LSHandle *sh, LSMessage *message, void *data);
-bool resetSettings(LSHandle *sh, LSMessage *message, void *data);
+bool is_root(LSHandle *sh, LSMessage *message, void *data);
+bool is_running(LSHandle *sh, LSMessage *message, void *data);
+bool get_settings(LSHandle *sh, LSMessage *message, void *data);
+bool set_settings(LSHandle *sh, LSMessage *message, void *data);
+bool reset_settings(LSHandle *sh, LSMessage *message, void *data);
 bool restart(LSHandle *sh, LSMessage *message, void *data);
 
 //Callbacks
-static bool cbmakeRoot(LSHandle *sh, LSMessage *msg, void *user_data);
+static bool cb_make_root(LSHandle *sh, LSMessage *msg, void *user_data);
 
 LSMethod lunaMethods[] = {
     {"start", start},       // luna://org.webosbrew.piccap.service/XXXX
     {"stop", stop},
-    {"isRoot", isRoot},
-    {"isRunning", isRunning},
-    {"getSettings", getSettings},
-    {"setSettings", setSettings},
-    {"resetSettings", resetSettings},
+    {"isRoot", is_root},
+    {"isRunning", is_running},
+    {"getSettings", get_settings},
+    {"setSettings", set_settings},
+    {"resetSettings", reset_settings},
     {"restart", restart}
 };
 
@@ -104,13 +104,13 @@ int capture_main();
 void *capture_loop(void *data);
 int cleanup();
 
-int getstartingpath(char *retstr);
-int makeRoot(LSHandle *handle);
-int checkRoot(LSHandle *handle);
-int setDefault();
-int loadSettings();
-int saveSettings(const char *savestring);
-int removeSettings();
+int get_starting_path(char *retstr);
+int make_root(LSHandle *handle);
+int check_root(LSHandle *handle);
+int set_default();
+int load_settings();
+int save_settings(const char *savestring);
+int remove_settings();
 
 int luna_resp(LSHandle *sh, LSMessage *message, char *replyPayload, LSError *lserror);
 //JSON helper functions
@@ -118,7 +118,7 @@ char* jval_to_string(jvalue_ref parsed, const char *item, const char *def);
 bool jval_to_bool(jvalue_ref parsed, const char *item, bool def);
 int jval_to_int(jvalue_ref parsed, const char *item, int def);
 
-int getstartingpath(char *retstr){
+int get_starting_path(char *retstr){
     int length;
     char fullpath[FILENAME_MAX];
     char *dirpath;
@@ -165,7 +165,7 @@ static int import_backend_library(const char *library_filename) {
     char *error;
     char libpath[FILENAME_MAX];
 
-    getstartingpath(libpath);
+    get_starting_path(libpath);
     PmLogInfo(logcontext, "FNCDLOPEN", 0, "Full exec path: %s", libpath);
     strcat(libpath, library_filename);
     PmLogInfo(logcontext, "FNCDLOPEN", 0, "Full library path: %s", libpath);
@@ -187,7 +187,7 @@ static int import_backend_library(const char *library_filename) {
     return 0;
 }
 
-int setDefault(){
+int set_default(){
     PmLogInfo(logcontext, "FNCSETDEF", 0, "Setting default settings to runtime..");
     _address = "";
     _port = 19400;
@@ -202,14 +202,14 @@ int setDefault(){
     return 0;
 }
 
-int checkRoot(LSHandle *handle){
+int check_root(LSHandle *handle){
     int uid;
     uid = geteuid();
     if(uid != 0){
         PmLogError(logcontext, "FNCISROOT", 0, "Service is not running as root! ID: %d", uid);
         rooted = false;
         PmLogInfo(logcontext, "FNCISROOT", 0, "Trying to evaluate using HBChannel/exec-Service!");
-        if(makeRoot(handle) != 0){
+        if(make_root(handle) != 0){
             PmLogError(logcontext, "FNCISROOT", 0, "Error while making root!");
         }
     }else{
@@ -219,7 +219,7 @@ int checkRoot(LSHandle *handle){
     return 0;
 }
 
-static bool cbmakeRoot(LSHandle *sh, LSMessage *msg, void *user_data){
+static bool cb_make_root(LSHandle *sh, LSMessage *msg, void *user_data){
 
     PmLogInfo(logcontext, "FNCMKROOTCB", 0, "Callback received.");
     JSchemaInfo schemaInfo;
@@ -260,9 +260,9 @@ static bool cbmakeRoot(LSHandle *sh, LSMessage *msg, void *user_data){
     return true;
 }
 
-int makeRoot(LSHandle *handle){
+int make_root(LSHandle *handle){
     LSError lserror;
-    if(!LSCall(handle, "luna://org.webosbrew.hbchannel.service/exec","{\"command\":\"/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service org.webosbrew.piccap.service\"}", cbmakeRoot, NULL, NULL, &lserror)){
+    if(!LSCall(handle, "luna://org.webosbrew.hbchannel.service/exec","{\"command\":\"/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service org.webosbrew.piccap.service\"}", cb_make_root, NULL, NULL, &lserror)){
         PmLogError(logcontext, "FNCMKROOT", 0, "Error while executing HBChannel/exec!");
         LSErrorPrint(&lserror, stderr);
         return 1;
@@ -329,7 +329,7 @@ static int parse_options(int argc, char *argv[])
 {
     PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Starting parsing arguments..");
     PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Setting default settings before parsing..");
-    if(setDefault() != 0){
+    if(set_default() != 0){
         PmLogError(logcontext, "FNCPARSEOPT", 0, "Error while setting default settings!");
     }
     int opt, longindex;
@@ -382,7 +382,7 @@ static int parse_options(int argc, char *argv[])
     if (config.no_service == 1){
         if (config.load_config == 1){
             PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Loading settings from disk to runtime..");
-            if(loadSettings() != 0){
+            if(load_settings() != 0){
                 PmLogError(logcontext, "FNCPARSEOPT", 0, "Error while loading settings!");
             }
             PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Finished loading settings.");
@@ -405,7 +405,7 @@ static int parse_options(int argc, char *argv[])
             
             PmLogInfo(logcontext, "FNCPARSEOPT", 0, "Saving JSON-String to disk..");
 
-            if(saveSettings(jvalue_tostring_simple(tosave)) != 0){
+            if(save_settings(jvalue_tostring_simple(tosave)) != 0){
                 PmLogError(logcontext, "FNCPARSEOPT", 0, "Error while saveing settings to disk!");
             }
             j_release(&tosave);
@@ -413,7 +413,7 @@ static int parse_options(int argc, char *argv[])
         }
 
 
-        if (_address == "")
+        if (strcmp(_address, "") == 0)
         {
             PmLogError(logcontext, "FNCPARSEOPT", 0, "Error! Address not specified.\n");
             print_usage();
@@ -483,17 +483,17 @@ int main(int argc, char *argv[])
         LSGmainAttach(handle, gmainLoop, &lserror);
 
         PmLogInfo(logcontext, "FNCMAIN", 0, "Checking service root status..");
-        if(checkRoot(handle) != 0){
+        if(check_root(handle) != 0){
             PmLogError(logcontext, "FNCMAIN", 0, "Error while checking for root status!");
         }
 
         PmLogInfo(logcontext, "FNCMAIN", 0, "Setting default settings before loading..");
-        if(setDefault() != 0){
+        if(set_default() != 0){
             PmLogError(logcontext, "FNCMAIN", 0, "Error while setting default settings!");
         }
 
         PmLogInfo(logcontext, "FNCMAIN", 0, "Loading settings from disk to runtime..");
-        if(loadSettings() != 0){
+        if(load_settings() != 0){
             PmLogError(logcontext, "FNCMAIN", 0, "Error while loading settings!");
         }
 
@@ -509,7 +509,7 @@ int main(int argc, char *argv[])
             }
 
             //Ensure set before starting
-            if (_address == "" || _backend == "" || config.fps < 0 || config.fps > 60){
+            if (strcmp(_address, "") == 0 || strcmp(_backend, "") == 0 || config.fps < 0 || config.fps > 60){
                 PmLogError(logcontext, "FNCMAIN", 0, "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60! | Address: %s | Backend: %s | FPS: %d", _address, _backend, config.fps);
                 goto skip;
             }
@@ -661,7 +661,7 @@ static int image_data_cb(int width, int height, uint8_t *rgb_data)
     }
 }
 
-int loadSettings(){
+int load_settings(){
     JSchemaInfo schemaInfo;
     jvalue_ref parsed = {0};
     char *confbuf;
@@ -672,8 +672,8 @@ int loadSettings(){
     
 
     PmLogInfo(logcontext, "FNCLOADCFG", 0,  "Try to read configfile.");
-    if(_configpath == ""){
-        getstartingpath(confpath);
+    if(strcmp(_configpath, "") == 0){
+        get_starting_path(confpath);
         strcat(confpath, conffile);
     }else{
         strcat(confpath, _configpath);
@@ -730,7 +730,7 @@ int loadSettings(){
     return retvalue;
 }
 
-bool getSettings(LSHandle *sh, LSMessage *message, void *data)
+bool get_settings(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCGCONF", 0,  "Luna call getSettings recieved.");
     LSError lserror;
@@ -745,7 +745,7 @@ bool getSettings(LSHandle *sh, LSMessage *message, void *data)
 
     // Initialize schema
    
-    load = loadSettings();
+    load = load_settings();
     if(load == 0){
         PmLogInfo(logcontext, "FNCGCONF", 0, "Loading settings successfully.");
     }else if(load == 1){
@@ -782,13 +782,13 @@ bool getSettings(LSHandle *sh, LSMessage *message, void *data)
     return true;
 }
 
-int saveSettings(const char *savestring){
+int save_settings(const char *savestring){
     char confpath[FILENAME_MAX];
     int retvalue = 0;
 
     PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Try to save configfile.");
-    if(_configpath == ""){
-        getstartingpath(confpath);
+    if(strcmp(_configpath, "") == 0){
+        get_starting_path(confpath);
         strcat(confpath, conffile);
     }else{
         strcat(confpath, _configpath);
@@ -812,7 +812,7 @@ int saveSettings(const char *savestring){
         char origpath[FILENAME_MAX];
         char *autostartfile = "piccapautostart";
 
-        getstartingpath(origpath);
+        get_starting_path(origpath);
         strcat(origpath, autostartfile);
 
         if(access(startpath, F_OK) == 0){
@@ -832,7 +832,7 @@ int saveSettings(const char *savestring){
     return retvalue;
 }
 
-bool setSettings(LSHandle *sh, LSMessage *message, void *data)
+bool set_settings(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCSCONF", 0,  "Luna call setSettings recieved.");
     LSError lserror;
@@ -884,7 +884,7 @@ bool setSettings(LSHandle *sh, LSMessage *message, void *data)
     jobject_set(tosave, j_cstr_to_buffer("autostart"), jboolean_create(autostart));
 
     PmLogInfo(logcontext, "FNCSCONF", 0,  "Saving JSON to disk..");
-    save = saveSettings(jvalue_tostring_simple(tosave));
+    save = save_settings(jvalue_tostring_simple(tosave));
     if(save != 0){
         backmsg = "Errors while saving file to disk!";
         luna_resp(sh, message, backmsg, &lserror);
@@ -909,12 +909,12 @@ bool setSettings(LSHandle *sh, LSMessage *message, void *data)
     return true;
 }
 
-int removeSettings(){
+int remove_settings(){
     char confpath[FILENAME_MAX];
     int retval = 0;
 
     PmLogInfo(logcontext, "FNCREMCFG", 0,  "Try to delete configfile.");
-    getstartingpath(confpath);
+    get_starting_path(confpath);
     strcat(confpath, conffile);
     if(remove(confpath) != 0){
         PmLogError(logcontext, "FNCREMCFG", 0,  "Error while deleting configfile at path %s", confpath);
@@ -943,7 +943,7 @@ int removeSettings(){
     return retval;
 }
 
-bool resetSettings(LSHandle *sh, LSMessage *message, void *data)
+bool reset_settings(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCRCONF", 0,  "Luna call resetSettings recieved.");
     LSError lserror;
@@ -956,7 +956,7 @@ bool resetSettings(LSHandle *sh, LSMessage *message, void *data)
     LSErrorInit(&lserror);
 
     PmLogInfo(logcontext, "FNCRCONF", 0,  "Removing settings..");
-    if(removeSettings() != 0){
+    if(remove_settings() != 0){
         PmLogError(logcontext, "FNCRCONF", 0,  "Errors while removing settings.");
         backmsg = "Errors while removing settings.";
         luna_resp(sh, message, backmsg, &lserror);
@@ -964,7 +964,7 @@ bool resetSettings(LSHandle *sh, LSMessage *message, void *data)
     }
 
     PmLogInfo(logcontext, "FNCRCONF", 0,  "Setting defaults..");
-    if(setDefault() != 0){
+    if(set_default() != 0){
         PmLogError(logcontext, "FNCRCONF", 0,  "Errors while setting default settings!");
         backmsg = "Errors while setting default settings!";
         luna_resp(sh, message, backmsg, &lserror);
@@ -1033,7 +1033,7 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
     }
 
     //Ensure set before starting
-    if (_address == "" || _backend == "" || config.fps < 0 || config.fps > 60){
+    if (strcmp(_address, "") == 0 || strcmp(_backend, "") == 0 || config.fps < 0 || config.fps > 60){
         PmLogError(logcontext, "FNCSTART", 0, "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60! | Address: %s | Backend: %s | FPS: %d", _address, _backend, config.fps);
         backmsg = "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60!";
         luna_resp(sh, message, backmsg, &lserror);
@@ -1149,7 +1149,7 @@ bool restart(LSHandle *sh, LSMessage *message, void *data)
 }
 
 
-bool isRunning(LSHandle *sh, LSMessage *message, void *data)
+bool is_running(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCISRUN", 0,  "Luna call isRunning recieved.");
     LSError lserror;
@@ -1170,7 +1170,7 @@ bool isRunning(LSHandle *sh, LSMessage *message, void *data)
     return true;
 }
 
-bool isRoot(LSHandle *sh, LSMessage *message, void *data)
+bool is_root(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCISROOT", 0,  "Luna call isRoot recieved.");
     LSError lserror;
