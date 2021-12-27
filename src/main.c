@@ -58,27 +58,27 @@ PmLogContext logcontext;
 LSHandle  *sh = NULL;
 LSMessage *message;
 // Declare of each method
-bool start(LSHandle *sh, LSMessage *message, void *data);
-bool stop(LSHandle *sh, LSMessage *message, void *data);
-bool is_root(LSHandle *sh, LSMessage *message, void *data);
-bool is_running(LSHandle *sh, LSMessage *message, void *data);
-bool get_settings(LSHandle *sh, LSMessage *message, void *data);
-bool set_settings(LSHandle *sh, LSMessage *message, void *data);
-bool reset_settings(LSHandle *sh, LSMessage *message, void *data);
-bool restart(LSHandle *sh, LSMessage *message, void *data);
+bool method_start(LSHandle *sh, LSMessage *message, void *data);
+bool method_stop(LSHandle *sh, LSMessage *message, void *data);
+bool method_is_root(LSHandle *sh, LSMessage *message, void *data);
+bool method_is_running(LSHandle *sh, LSMessage *message, void *data);
+bool method_get_settings(LSHandle *sh, LSMessage *message, void *data);
+bool method_set_settings(LSHandle *sh, LSMessage *message, void *data);
+bool method_reset_settings(LSHandle *sh, LSMessage *message, void *data);
+bool method_restart(LSHandle *sh, LSMessage *message, void *data);
 
 //Callbacks
 static bool cb_make_root(LSHandle *sh, LSMessage *msg, void *user_data);
 
 LSMethod lunaMethods[] = {
-    {"start", start},       // luna://org.webosbrew.piccap.service/XXXX
-    {"stop", stop},
-    {"isRoot", is_root},
-    {"isRunning", is_running},
-    {"getSettings", get_settings},
-    {"setSettings", set_settings},
-    {"resetSettings", reset_settings},
-    {"restart", restart}
+    {"start", method_start},       // luna://org.webosbrew.piccap.service/XXXX
+    {"stop", method_stop},
+    {"isRoot", method_is_root},
+    {"isRunning", method_is_running},
+    {"getSettings", method_get_settings},
+    {"setSettings", method_set_settings},
+    {"resetSettings", method_reset_settings},
+    {"restart", method_restart}
 };
 
 
@@ -730,7 +730,7 @@ int load_settings(){
     return retvalue;
 }
 
-bool get_settings(LSHandle *sh, LSMessage *message, void *data)
+bool method_get_settings(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCGCONF", 0,  "Luna call getSettings recieved.");
     LSError lserror;
@@ -832,7 +832,7 @@ int save_settings(const char *savestring){
     return retvalue;
 }
 
-bool set_settings(LSHandle *sh, LSMessage *message, void *data)
+bool method_set_settings(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCSCONF", 0,  "Luna call setSettings recieved.");
     LSError lserror;
@@ -888,6 +888,8 @@ bool set_settings(LSHandle *sh, LSMessage *message, void *data)
     if(save != 0){
         backmsg = "Errors while saving file to disk!";
         luna_resp(sh, message, backmsg, &lserror);
+        j_release(&tosave);
+        j_release(&parsed);
         return true;
     }
 
@@ -943,7 +945,7 @@ int remove_settings(){
     return retval;
 }
 
-bool reset_settings(LSHandle *sh, LSMessage *message, void *data)
+bool method_reset_settings(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCRCONF", 0,  "Luna call resetSettings recieved.");
     LSError lserror;
@@ -987,11 +989,12 @@ bool reset_settings(LSHandle *sh, LSMessage *message, void *data)
 
     PmLogInfo(logcontext, "FNCRCONF", 0,  "Luna call resetSettings finished.");
     j_release(&parsed);
+    j_release(&jobj);
     return true;
 }
 
 
-bool start(LSHandle *sh, LSMessage *message, void *data)
+bool method_start(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCSTART", 0,  "Luna call start recieved.");
     LSError lserror;
@@ -1076,10 +1079,11 @@ bool start(LSHandle *sh, LSMessage *message, void *data)
 
     PmLogInfo(logcontext, "FNCSTART", 0,  "Luna call start finished.");
     j_release(&parsed);
+    j_release(&jobj);
     return true;
 }
 
-bool stop(LSHandle *sh, LSMessage *message, void *data)
+bool method_stop(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCSTOP", 0,  "Luna call stop recieved.");
     LSError lserror;
@@ -1122,10 +1126,11 @@ bool stop(LSHandle *sh, LSMessage *message, void *data)
 
     PmLogInfo(logcontext, "FNCSTOP", 0,  "Luna call stop finished.");
     j_release(&parsed);
+    j_release(&jobj);
     return true;
 }
 
-bool restart(LSHandle *sh, LSMessage *message, void *data)
+bool method_restart(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCRESTART", 0,  "Luna call restart recieved.");
     LSError lserror;
@@ -1143,13 +1148,14 @@ bool restart(LSHandle *sh, LSMessage *message, void *data)
     jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
+    j_release(&jobj);
     PmLogInfo(logcontext, "FNCISRUN", 0,  "Luna call isRunning finished.");
     raise(SIGTERM);
     return true;
 }
 
 
-bool is_running(LSHandle *sh, LSMessage *message, void *data)
+bool method_is_running(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCISRUN", 0,  "Luna call isRunning recieved.");
     LSError lserror;
@@ -1166,11 +1172,12 @@ bool is_running(LSHandle *sh, LSMessage *message, void *data)
     jobject_set(jobj, j_cstr_to_buffer("isRunning"), jboolean_create(isrunning));
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
+    j_release(&jobj);
     PmLogInfo(logcontext, "FNCISRUN", 0,  "Luna call isRunning finished.");
     return true;
 }
 
-bool is_root(LSHandle *sh, LSMessage *message, void *data)
+bool method_is_root(LSHandle *sh, LSMessage *message, void *data)
 {
     PmLogInfo(logcontext, "FNCISROOT", 0,  "Luna call isRoot recieved.");
     LSError lserror;
@@ -1193,6 +1200,7 @@ bool is_root(LSHandle *sh, LSMessage *message, void *data)
     jobject_set(jobj, j_cstr_to_buffer("backmsg"), jstring_create(backmsg));
     LSMessageReply(sh, message, jvalue_tostring_simple(jobj), &lserror);
 
+    j_release(&jobj);
     PmLogInfo(logcontext, "FNCISROOT", 0,  "Luna call isRoot finished.");
     return true;
 }
