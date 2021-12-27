@@ -29,6 +29,7 @@ static struct option long_options[] = {
     {"fps", required_argument, 0, 'f'},
     {"no-video", no_argument, 0, 'V'},
     {"no-gui", no_argument, 0, 'G'},
+    {"verbose", no_argument, 0, 'v'},
     {"backend", required_argument, 0, 'b'},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0},
@@ -108,12 +109,13 @@ static void print_usage()
     printf("  -b, --backend=BE      Use specific backend (default auto)\n");
     printf("  -V, --no-video        Video will not be captured\n");
     printf("  -G, --no-gui          GUI/UI will not be captured\n");
+    printf("  -v, --verbose         Verbose logging\n");
 }
 
 static int parse_options(int argc, char *argv[])
 {
     int opt, longindex;
-    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:h", long_options, &longindex)) != -1)
+    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:hGVv", long_options, &longindex)) != -1)
     {
         switch (opt)
         {
@@ -137,6 +139,9 @@ static int parse_options(int argc, char *argv[])
             break;
         case 'G':
             config.no_gui = 1;
+            break;
+        case 'v':
+            config.verbose = 1;
             break;
         case 'b':
             _backend = strdup(optarg);
