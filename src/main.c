@@ -88,6 +88,8 @@ bool exitme = false;
 bool isrunning = false;
 bool initialized = false;
 
+char basepath[FILENAME_MAX] = "\0";
+
 static const char *_backend = "";
 static const char *_address = "";
 static const char *_configpath= "";
@@ -163,10 +165,10 @@ int get_starting_path(char *retstr){
 
 static int import_backend_library(const char *library_filename) {
     char *error;
-    char libpath[FILENAME_MAX];
+    char libpath[FILENAME_MAX] = "\0";
 
-    get_starting_path(libpath);
     PmLogInfo(logcontext, "FNCDLOPEN", 0, "Full exec path: %s", libpath);
+    strcat(libpath, basepath);
     strcat(libpath, library_filename);
     PmLogInfo(logcontext, "FNCDLOPEN", 0, "Full library path: %s", libpath);
 
@@ -453,6 +455,9 @@ int main(int argc, char *argv[])
     signal(SIGTERM, handle_signal);
     signal(SIGCONT, handle_signal);
 
+    PmLogInfo(logcontext, "FNCMAIN", 0, "Getting basepath..");
+    get_starting_path(basepath);
+
     int ret;
     if ((ret = parse_options(argc, argv)) != 0)
     {
@@ -678,14 +683,14 @@ int load_settings(){
     jvalue_ref parsed = {0};
     char *confbuf;
     int sconf, sstr;
-    char confpath[FILENAME_MAX];
+    char confpath[FILENAME_MAX] = "\0";
     int retvalue = 0;
 
     
 
     PmLogInfo(logcontext, "FNCLOADCFG", 0,  "Try to read configfile.");
     if(strcmp(_configpath, "") == 0){
-        get_starting_path(confpath);
+        strcat(confpath, basepath);
         strcat(confpath, conffile);
     }else{
         strcat(confpath, _configpath);
@@ -795,12 +800,12 @@ bool method_get_settings(LSHandle *sh, LSMessage *message, void *data)
 }
 
 int save_settings(const char *savestring){
-    char confpath[FILENAME_MAX];
+    char confpath[FILENAME_MAX] = "\0";
     int retvalue = 0;
 
     PmLogInfo(logcontext, "FNCSAVECFG", 0,  "Try to save configfile.");
     if(strcmp(_configpath, "") == 0){
-        get_starting_path(confpath);
+        strcat(confpath, basepath);
         strcat(confpath, conffile);
     }else{
         strcat(confpath, _configpath);
@@ -824,7 +829,7 @@ int save_settings(const char *savestring){
         char origpath[FILENAME_MAX];
         char *autostartfile = "piccapautostart";
 
-        get_starting_path(origpath);
+        strcat(origpath, basepath);
         strcat(origpath, autostartfile);
 
         if(access(startpath, F_OK) == 0){
@@ -928,7 +933,7 @@ int remove_settings(){
     int retval = 0;
 
     PmLogInfo(logcontext, "FNCREMCFG", 0,  "Try to delete configfile.");
-    get_starting_path(confpath);
+    strcat(confpath, basepath);
     strcat(confpath, conffile);
     if(remove(confpath) != 0){
         PmLogError(logcontext, "FNCREMCFG", 0,  "Error while deleting configfile at path %s", confpath);
