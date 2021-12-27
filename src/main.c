@@ -298,6 +298,16 @@ static void handle_signal(int signal)
         PmLogError(logcontext, "SIGTERM", 0, "SIGTERM called! Stopping capture if running and exit..");
         exitme = true;
         app_quit = true;
+        exit(0);
+        break;
+    case SIGCONT:
+        PmLogError(logcontext, "SIGCONT", 0, "SIGCONT called! Stopping capture if running and rerun from scratch..");
+        app_quit = true;
+        if ((capture_main()) != 0){
+            PmLogError(logcontext, "SIGCONT", 0,  "ERROR: Capture main init failed! Will quit..");
+            break;
+        }
+        PmLogInfo(logcontext, "SIGCONT", 0,  "Capture main started!");
         break;
     default:
         break;
@@ -440,6 +450,8 @@ int main(int argc, char *argv[])
     PmLogGetContext("hyperion-webos_service", &logcontext);
     PmLogInfo(logcontext, "FNCMAIN", 0, "Service main starting..");
     signal(SIGINT, handle_signal);
+    signal(SIGTERM, handle_signal);
+    signal(SIGCONT, handle_signal);
 
     int ret;
     if ((ret = parse_options(argc, argv)) != 0)
