@@ -63,7 +63,7 @@ int capture_init() {
     PmLogInfo(logcontext, "DILEINIT", 0, "Init called.");
     if (getenv("NO_VSYNC_THREAD") != NULL) {
         use_vsync_thread = false;
-        PmLogError(logcontext, "DILECPTINIT", 0, "[DILE_VT] Disabling vsync thread\n");
+        PmLogError(logcontext, "DILECPTINIT", 0, "[DILE_VT] Disabling vsync thread");
     }
     return 0;
 }
@@ -105,10 +105,10 @@ int capture_start()
         return -11;
     }
 
-    PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] supportScaleUp: %d; (%dx%d)\n", limitation.supportScaleUp, limitation.scaleUpLimitWidth, limitation.scaleUpLimitHeight);
-    PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] supportScaleDown: %d; (%dx%d)\n", limitation.supportScaleDown, limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight);
-    PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] maxResolution: %dx%d\n", limitation.maxResolution.width, limitation.maxResolution.height);
-    PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] input deinterlace: %d; display deinterlace: %d\n", limitation.supportInputVideoDeInterlacing, limitation.supportDisplayVideoDeInterlacing);
+    PmLogInfo(logcontext, "DILECPTSTART", 0, "[DILE_VT] supportScaleUp: %d; (%dx%d)", limitation.supportScaleUp, limitation.scaleUpLimitWidth, limitation.scaleUpLimitHeight);
+    PmLogInfo(logcontext, "DILECPTSTART", 0, "[DILE_VT] supportScaleDown: %d; (%dx%d)", limitation.supportScaleDown, limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight);
+    PmLogInfo(logcontext, "DILECPTSTART", 0, "[DILE_VT] maxResolution: %dx%d", limitation.maxResolution.width, limitation.maxResolution.height);
+    PmLogInfo(logcontext, "DILECPTSTART", 0, "[DILE_VT] input deinterlace: %d; display deinterlace: %d", limitation.supportInputVideoDeInterlacing, limitation.supportDisplayVideoDeInterlacing);
 
     if (DILE_VT_SetVideoFrameOutputDeviceDumpLocation(vth, DILE_VT_DISPLAY_OUTPUT) != 0) {
         return -2;
@@ -117,7 +117,7 @@ int capture_start()
     DILE_VT_RECT region = {0, 0, config.resolution_width, config.resolution_height};
 
     if (region.width < limitation.scaleDownLimitWidth || region.height < limitation.scaleDownLimitHeight) {
-        fprintf(stderr, "[DILE_VT] WARNING: scaledown is limited to %dx%d while %dx%d has been chosen - there's a chance this will crash!\n", limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight, region.width, region.height);
+        PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] WARNING: scaledown is limited to %dx%d while %dx%d has been chosen - there's a chance this will crash!", limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight, region.width, region.height);
     }
 
     if (DILE_VT_SetVideoFrameOutputDeviceOutputRegion(vth, DILE_VT_DISPLAY_OUTPUT, &region) != 0) {
@@ -133,7 +133,7 @@ int capture_start()
     // average it out - if someone sets their preferred framerate to 30 and
     // content was 50fps, we'll just end up feeding 25 frames per second.
     output_state.framerate = config.fps == 0 ? 1 : 60 / config.fps;
-    PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] framerate divider: %d\n", output_state.framerate);
+    PmLogInfo(logcontext, "DILECPTSTART", 0, "[DILE_VT] framerate divider: %d", output_state.framerate);
 
     DILE_VT_WaitVsync(vth, 0, 0);
     uint64_t t1 = getticks_us();
@@ -141,7 +141,7 @@ int capture_start()
     uint64_t t2 = getticks_us();
 
     double fps = 1000000.0 / (t2 - t1);
-    fprintf(stderr, "[DILE_VT] frametime: %d; estimated fps before divider: %.5f\n", t2 - t1, fps);
+    PmLogInfo(logcontext, "DILECPTSTART", 0, "[DILE_VT] frametime: %d; estimated fps before divider: %.5f", t2 - t1, fps);
 
     // Set framerate divider
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FRAMERATE_DIVIDE, &output_state) != 0) {
@@ -154,7 +154,7 @@ int capture_start()
     t2 = getticks_us();
 
     fps = 1000000.0 / (t2 - t1);
-    fprintf(stderr, "[DILE_VT] frametime: %d; estimated fps after divider: %.5f\n", t2 - t1, fps);
+    PmLogInfo(logcontext, "DILECPTSTART", 0, "[DILE_VT] frametime: %d; estimated fps after divider: %.5f", t2 - t1, fps);
 
     // Set freeze
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &output_state) != 0) {
@@ -166,7 +166,7 @@ int capture_start()
         return -9;
     }
 
-    fprintf(stderr, "[DILE_VT] vfbs: %d; planes: %d\n", vfbcap.numVfbs, vfbcap.numPlanes);
+    PmLogInfo(logcontext, "DILECPTSTART", 0, "[DILE_VT] vfbs: %d; planes: %d", vfbcap.numVfbs, vfbcap.numPlanes);
     uint32_t** ptr = calloc(sizeof(uint32_t*), vfbcap.numVfbs);
     for (int vfb = 0; vfb < vfbcap.numVfbs; vfb++) {
         ptr[vfb] = calloc(sizeof(uint32_t), vfbcap.numPlanes);
@@ -184,12 +184,12 @@ int capture_start()
         return -6;
     }
 
-    PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] pixelFormat: %d; width: %d; height: %d; stride: %d...\n", vfbprop.pixelFormat, vfbprop.width, vfbprop.height, vfbprop.stride);
+    PmLogInfo(logcontext, "DILECPTSTART", 0, "DILECPTSTART", 0, "[DILE_VT] pixelFormat: %d; width: %d; height: %d; stride: %d...", vfbprop.pixelFormat, vfbprop.width, vfbprop.height, vfbprop.stride);
     vfbs = calloc(vfbcap.numVfbs, sizeof(uint8_t**));
     for (int vfb = 0; vfb < vfbcap.numVfbs; vfb++) {
         vfbs[vfb] = calloc(vfbcap.numPlanes, sizeof(uint8_t*));
         for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
-            PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] vfb[%d][%d] = 0x%08x\n", vfb, plane, vfbprop.ptr[vfb][plane]);
+            PmLogError(logcontext, "DILECPTSTART", 0, "[DILE_VT] vfb[%d][%d] = 0x%08x", vfb, plane, vfbprop.ptr[vfb][plane]);
             vfbs[vfb][plane] = (uint8_t*) mmap(0, vfbprop.stride * vfbprop.height, PROT_READ, MAP_SHARED, mem_fd, vfbprop.ptr[vfb][plane]);
         }
     }
@@ -232,7 +232,7 @@ void capture_frame() {
 
     uint64_t now = getticks_us();
     if (framecount % 30 == 0) {
-        PmLogError(logcontext, "DILECPTFRM", 0, "[DILE_VT] framerate: %.6f FPS\n", (30.0 * 1000000) / (now - start_time));
+        PmLogError(logcontext, "DILECPTFRM", 0, "[DILE_VT] framerate: %.6f FPS", (30.0 * 1000000) / (now - start_time));
         start_time = now;
     }
 
@@ -251,14 +251,14 @@ void capture_frame() {
         NV21ToRGB24(vfbs[idx][0], vfbprop.stride, vfbs[idx][1], vfbprop.stride, outbuf, vfbprop.width * 3, vfbprop.width, vfbprop.height);
         imagedata_cb(vfbprop.width, vfbprop.height, outbuf);
     } else {
-        PmLogError(logcontext, "DILECPTFRM", 0, "[DILE_VT] Unsupported pixel format: %d\n", vfbprop.pixelFormat);
+        PmLogError(logcontext, "DILECPTFRM", 0, "[DILE_VT] Unsupported pixel format: %d", vfbprop.pixelFormat);
         for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
             char filename[256];
             snprintf(filename, sizeof(filename), "/tmp/hyperion-webos-dump.%03d.%03d.raw", idx, plane);
             FILE* fd = fopen(filename, "wb");
             fwrite(vfbs[idx][plane], vfbprop.stride * vfbprop.height, 1, fd);
             fclose(fd);
-            PmLogError(logcontext, "DILECPTFRM", 0, "[DILE_VT] Dumped buffer to: %s\n", filename);
+            PmLogError(logcontext, "DILECPTFRM", 0, "[DILE_VT] Dumped buffer to: %s", filename);
         }
     }
 
