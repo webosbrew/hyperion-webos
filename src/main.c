@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <libgen.h>
 #include "common.h"
 #include "hyperion_client.h"
 #include <glib.h>
@@ -120,6 +121,7 @@ int jval_to_int(jvalue_ref parsed, const char *item, int def);
 int getstartingpath(char *retstr){
     int length;
     char fullpath[FILENAME_MAX];
+    char *dirpath;
      
      /* /proc/self is a symbolic link to the process-ID subdir
       * of /proc, e.g. /proc/4323 when the pid of the process
@@ -151,9 +153,10 @@ int getstartingpath(char *retstr){
     * returns is appended with a '@'.
     */
     fullpath[length] = '\0';       /* Strip '@' off the end. */
-    fullpath[length-14] = '\0';       //Assuming binary is called hyperion-webos = 14 chars | maybe TODO detection
+    dirpath = dirname(fullpath);
+    strcat(dirpath,"/");
 
-    strcpy(retstr,fullpath);
+    strcpy(retstr,dirpath);
     PmLogInfo(logcontext, "FNCGPATH", 0, "Full path is: %s", retstr);
     return 0;
 }
