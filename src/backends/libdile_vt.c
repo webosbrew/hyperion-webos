@@ -235,10 +235,10 @@ void dump_buffer(uint8_t* buf, uint64_t size, uint32_t idx, uint32_t plane) {
 }
 
 void capture_frame() {
-    static uint8_t* outbuf = NULL;
     uint16_t t1,t7;
     uint32_t width = vfbprop.width;
     uint32_t height = vfbprop.height;
+    static uint8_t* outbuf = NULL;
     static uint8_t* argbvideo = NULL;
     static uint8_t* argbblended = NULL;
     static uint8_t* argbui = NULL;
