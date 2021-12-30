@@ -198,6 +198,8 @@ int capture_start()
        return -12;
     }
 
+    capture_running = true;
+
     if (pthread_create (&capture_thread, NULL, capture_thread_target, NULL) != 0) {
         return -7;
     }
