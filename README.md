@@ -24,8 +24,8 @@ webOS versions/hardware platforms.
 
 | Backend        | Description                                                                                    | Video | UI | Framerate | webOS |
 |----------------|------------------------------------------------------------------------------------------------|-------|----|-----------|-------|
-| `libdile_vt`   | Low-level library used internally by libvt                                                     |   ✔   | ✘¹ | 60        | 3.x+ |
-| `libvt`        | High-level video rendering library, uses OpenGL, may cause flickering/"No signal" until reboot |   ✔   | ✘¹ | ~30       | 3.x+ |
+| `libdile_vt`   | Low-level library used internally by libvt                                                     |   ✔   | ✔  | 60        | 3.x-5.x |
+| `libvt`        | High-level video rendering library, uses OpenGL, may cause flickering/"No signal" until reboot |   ✔   | ✘¹ | ~30       | 3.x-5.x |
 | `libvtcapture` | High-level video capture library, uses Luna bus, could possibly work without root (not now)    |   ✔   | ✔  | ~25       | 5.x+ |
 
 ¹ - UI capture could be added at some point in the future
