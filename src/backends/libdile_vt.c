@@ -83,7 +83,9 @@ int capture_terminate() {
         pthread_join(vsync_thread, NULL);
     }
 
-    GM_DestroySurface(gm_surface.surfaceID);
+    if (!config.no_gui) {
+        GM_DestroySurface(gm_surface.surfaceID);
+    }
 
     DILE_VT_Stop(vth);
 
@@ -199,7 +201,7 @@ int capture_start()
         }
     }
 
-    if (GM_CreateSurface(region.width, region.height, 0, &gm_surface) != 0) {
+    if (!config.no_gui && GM_CreateSurface(region.width, region.height, 0, &gm_surface) != 0) {
         return -13;
     }
 
@@ -332,7 +334,7 @@ void capture_frame() {
     t7 = getticks_us();
 
     if ((framecount % 15 == 0) && config.verbose) {
-        fprintf(stderr, "[DILE_VT] frame feed time: %.3fms\n", (t7 - t1) / 1000);
+        PmLogInfo(logcontext, "DILECPTFRM", 0, "[DILE_VT] frame feed time: %.3fms", (t7 - t1) / 1000);
     }
 
     output_state.freezed = 0;
