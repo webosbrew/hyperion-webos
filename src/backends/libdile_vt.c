@@ -238,6 +238,7 @@ void capture_frame() {
     uint16_t t1,t7;
     uint32_t width = vfbprop.width;
     uint32_t height = vfbprop.height;
+
     static uint8_t* outbuf = NULL;
     static uint8_t* argbvideo = NULL;
     static uint8_t* argbblended = NULL;
@@ -265,23 +266,26 @@ void capture_frame() {
     framecount += 1;
 
     if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_RGB) {
+        // Width is incorrectly reported on RGB pixel format (equal to stride)
+        width = vfbprop.stride / 3;
+
         t1 = getticks_us();
         if (config.no_gui) {
             outbuf = vfbs[idx][0];
         } else {
             if (outbuf == NULL)
-                outbuf = malloc(3 * width * height); // Temporary conversion buffer
+                outbuf = malloc(3 * width * height);
 
             if (config.no_video) {
                 GM_CaptureGraphicScreen(gm_surface.surfaceID, &width, &height);
                 ABGRToRGB24(gm_surface.framebuffer, 4 * width, outbuf, 3 * width, width, height);
             } else {
                 if (argbui == NULL)
-                    argbui = malloc(3 * width * height);
+                    argbui = malloc(4 * width * height);
                 if (argbvideo == NULL)
-                    argbvideo = malloc(3 * width * height);
+                    argbvideo = malloc(4 * width * height);
                 if (argbblended == NULL)
-                    argbblended = malloc(3 * width * height);
+                    argbblended = malloc(4 * width * height);
 
                 GM_CaptureGraphicScreen(gm_surface.surfaceID, &width, &height);
                 ABGRToARGB(gm_surface.framebuffer, 4 * width, argbui, 4 * width, width, height);
@@ -292,7 +296,7 @@ void capture_frame() {
         }
     } else if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_YUV420_SEMI_PLANAR) {
         if (outbuf == NULL)
-            outbuf = malloc (width * height * 3); // Temporary conversion buffer
+            outbuf = malloc(3 * width * height);
 
         if (config.no_gui) {
             t1 = getticks_us();
@@ -303,11 +307,11 @@ void capture_frame() {
             ABGRToRGB24(gm_surface.framebuffer, 4 * width, outbuf, 3 * width, width, height);
         } else {
             if (argbvideo == NULL)
-                argbvideo = malloc(3 * width * height);
+                argbvideo = malloc(4 * width * height);
             if (argbblended == NULL)
-                argbblended = malloc(3 * width * height);
+                argbblended = malloc(4 * width * height);
             if (argbui == NULL)
-                argbui = malloc(3 * width * height);
+                argbui = malloc(4 * width * height);
 
             t1 = getticks_us();
             GM_CaptureGraphicScreen(gm_surface.surfaceID, &width, &height);
