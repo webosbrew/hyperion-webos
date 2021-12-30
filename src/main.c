@@ -49,7 +49,7 @@ static struct option long_options[] = {
     {0, 0, 0, 0},
 };
 
-pthread_t capture_thread;
+pthread_t connection_thread;
 
 // Main loop for aliving background service
 GMainLoop *gmainLoop;
@@ -103,7 +103,7 @@ static cap_backend_funcs_t backend = {NULL};
 
 static int image_data_cb(int width, int height, uint8_t *rgb_data);
 int capture_main();
-void *capture_loop(void *data);
+void *connection_loop(void *data);
 int cleanup();
 
 int get_starting_path(char *retstr);
@@ -606,34 +606,40 @@ int capture_main(){
         return -1;
     }
 
-    PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Connecting hyperion-client..");
-    if ((hyperion_client("webos", _address, _port, 150)) != 0)
-    {
-        PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! hyperion_client.");
-        cleanup();
-        return -1;
-    }
     PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Capture main init completed. Creating subproccess for looping..");
     initialized = true;
     app_quit = false;
     isrunning = true;
-    if (pthread_create(&capture_thread, NULL, capture_loop, NULL) != 0) {
+    if (pthread_create(&connection_thread, NULL, connection_loop, NULL) != 0) {
         return -1;
     }
     return 0;
 }
 
-void *capture_loop(void *data){
+void *connection_loop(void *data){
     PmLogInfo(logcontext, "FNCCPTLOOP", 0, "Starting connection loop");
     while (!app_quit)
     {
-        if (hyperion_read() < 0)
-        {
-            PmLogError(logcontext, "FNCCPTLOOP", 0, "Error! Connection timeout.");
-            isrunning = false;
-            app_quit = true;
+        PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Connecting hyperion-client..");
+        if ((hyperion_client("webos", _address, _port, 150)) != 0) {
+            PmLogError(logcontext, "FNCCPTMAIN", 0, "Error! hyperion_client.");
+        } else {
+            while (!app_quit) {
+                if (hyperion_read() < 0) {
+                    PmLogError(logcontext, "FNCCPTLOOP", 0, "Error! Connection timeout.");
+                    break;
+                }
+            }
+        }
+
+        hyperion_destroy();
+
+        if (!app_quit) {
+            PmLogInfo(logcontext, "FNCCPTMAIN", 0, "Connection destroyed, waiting...");
+            sleep(1);
         }
     }
+
     PmLogInfo(logcontext, "FNCCPTLOOP", 0, "Ending connection loop");
     if(exitme){
         PmLogInfo(logcontext, "FNCCPTLOOP", 0, "exitme true -> Exit");
@@ -648,7 +654,7 @@ int cleanup(){
     if (isrunning){
         PmLogInfo(logcontext, "FNCCLEAN", 0, "Capture is running! Breaking loop and joining thread..");
         app_quit=true;
-        pthread_join(capture_thread, NULL);
+        pthread_join(connection_thread, NULL);
         isrunning=false;
     }
     PmLogInfo(logcontext, "FNCCLEAN", 0, "Destroying hyperion-client..");
@@ -673,8 +679,6 @@ static int image_data_cb(int width, int height, uint8_t *rgb_data)
     if (hyperion_set_image(rgb_data, width, height) != 0)
     {
         PmLogError(logcontext, "FNCIMGDATA", 0, "Error! Write timeout.");
-        isrunning = false;
-        app_quit = true;
     }
 }
 
