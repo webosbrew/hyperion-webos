@@ -47,6 +47,13 @@ int hyperion_client(const char *origin, const char *hostname, int port, int prio
         return 1;
     }
 
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout,
+                   sizeof(timeout)) < 0)
+    {
+        fprintf(stderr, "setsockopt failed\n");
+        return 1;
+    }
+
     memset(&serv_addr, '0', sizeof(serv_addr));
 
     serv_addr.sin_family = AF_INET;
