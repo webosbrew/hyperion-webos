@@ -403,23 +403,9 @@ static int parse_options(int argc, char *argv[])
                 ERR("Error while saving settings to disk!");
             }
             j_release(&tosave);
-        }
 
-
-        if (strcmp(_address, "") == 0)
-        {
-            print_usage();
-            return 1;
+            DBG("Finished saving settings.");
         }
-        if (config.fps < 0 || config.fps > 60)
-        {
-            print_usage();
-            return 1;
-        }
-        if (config.fps == 0)
-            config.framedelay_us = 0;
-        else
-            config.framedelay_us = 1000000 / config.fps;
     }
 
     DBG("Finished parsing arguments");
@@ -509,16 +495,6 @@ int main(int argc, char *argv[])
                 goto skip;
             }
 
-            //Ensure set before starting
-            if (strcmp(_address, "") == 0 || strcmp(_backend, "") == 0 || config.fps < 0 || config.fps > 60){
-                goto skip;
-            }
-
-            if (config.fps == 0){
-                config.framedelay_us = 0;
-            }else{
-                config.framedelay_us = 1000000 / config.fps;
-            }
             //luna-send -a org.webosbrew.piccap -f -n 1 luna://com.webos.notification/createToast '{"sourceId":"org.webosbrew.piccap","message": "PicCap startup is enabled! Calling service for startup.."}'
             if(!LSCall(handle, "luna://com.webos.notification/createToast","{\"sourceId\":\"org.webosbrew.piccap\",\"message\": \"PicCap startup is enabled! Calling service for startup..\"}", NULL, NULL, NULL, &lserror)){
                 ERR("Error while executing toast notification!");
@@ -1056,18 +1032,6 @@ bool method_start(LSHandle *sh, LSMessage *message, void *data)
         return true;
     }
 
-    //Ensure set before starting
-    if (strcmp(_address, "") == 0 || strcmp(_backend, "") == 0 || config.fps < 0 || config.fps > 60){
-        backmsg = "ERROR: Address and Backend are neccassary parameters and FPS should be between 0 (unlimited) and 60!";
-        luna_resp(sh, message, backmsg, &lserror);
-        return true;
-    }
-
-    if (config.fps == 0){
-        config.framedelay_us = 0;
-    }else{
-        config.framedelay_us = 1000000 / config.fps;
-    }
     DBG("Calling capture start main..");
 
     if ((capture_main()) != 0){
