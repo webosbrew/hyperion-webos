@@ -117,39 +117,25 @@ char* jval_to_string(jvalue_ref parsed, const char *item, const char *def);
 bool jval_to_bool(jvalue_ref parsed, const char *item, bool def);
 int jval_to_int(jvalue_ref parsed, const char *item, int def);
 
+/**
+ * Returns base directory current executable is stored in
+ */
 int get_starting_path(char *retstr){
     int length;
     char fullpath[FILENAME_MAX];
     char *dirpath;
-     
-     /* /proc/self is a symbolic link to the process-ID subdir
-      * of /proc, e.g. /proc/4323 when the pid of the process
-      * of this program is 4323.
-      *
-      * Inside /proc/<pid> there is a symbolic link to the
-      * executable that is running as this <pid>.  This symbolic
-      * link is called "exe".
-      *
-      * So if we read the path where the symlink /proc/self/exe
-      * points to we have the full path of the executable.
-      * https://www.linuxquestions.org/questions/programming-9/get-full-path-of-a-command-in-c-117965/
-      */
 
+    length = readlink("/proc/self/exe", fullpath, sizeof(fullpath)-1);
 
-    length = readlink("/proc/self/exe", fullpath, sizeof(fullpath));
-     
     /* Catch some errors: */
     if (length < 0) {
-        return -1;
-    }
-    if (length >= FILENAME_MAX) {
+        ERR("Error resolving symlink /proc/self/exe.");
         return -1;
     }
 
-    /* I don't know why, but the string this readlink() function 
-    * returns is appended with a '@'.
-    */
-    fullpath[length] = '\0';       /* Strip '@' off the end. */
+    // readlink does not return null-limited string
+    fullpath[length] = '\0';
+
     dirpath = dirname(fullpath);
     strcat(dirpath,"/");
 
