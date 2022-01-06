@@ -137,7 +137,7 @@ int capture_start()
     uint64_t t2 = getticks_us();
 
     double fps = 1000000.0 / (t2 - t1);
-    INFO("[DILE_VT] frametime: %d; estimated fps before divider: %.5f", t2 - t1, fps);
+    INFO("[DILE_VT] frametime: %d; estimated fps before divider: %.5f", (uint32_t) (t2 - t1), fps);
 
     // Set framerate divider
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FRAMERATE_DIVIDE, &output_state) != 0) {
@@ -150,7 +150,7 @@ int capture_start()
     t2 = getticks_us();
 
     fps = 1000000.0 / (t2 - t1);
-    INFO("[DILE_VT] frametime: %d; estimated fps after divider: %.5f", t2 - t1, fps);
+    INFO("[DILE_VT] frametime: %d; estimated fps after divider: %.5f", (uint32_t) (t2 - t1), fps);
 
     // Set freeze
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &output_state) != 0) {
@@ -191,7 +191,7 @@ int capture_start()
     }
 
     if (DILE_VT_Start(vth) != 0) {
-       return -12;
+        return -12;
     }
 
     capture_running = true;
@@ -205,7 +205,8 @@ int capture_start()
             return -8;
         }
     }
-    INFO("Capture finished.");
+
+    return 0;
 }
 
 uint64_t framecount = 0;
@@ -222,6 +223,10 @@ void dump_buffer(uint8_t* buf, uint64_t size, uint32_t idx, uint32_t plane) {
 }
 
 void capture_frame() {
+    uint64_t t1, t6, t7;
+    uint32_t width = vfbprop.width;
+    uint32_t height = vfbprop.height;
+
     static uint8_t* outbuf = NULL;
 
     if (use_vsync_thread) {
@@ -245,18 +250,17 @@ void capture_frame() {
 
     framecount += 1;
 
-
+    t1 = getticks_us();
     if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_RGB) {
         // Note: vfbprop.width is equal to stride for some reason.
-        imagedata_cb(vfbprop.stride / 3, vfbprop.height, vfbs[idx][0]);
+        width = vfbprop.stride / 3;
+        outbuf = vfbs[idx][0];
     } else if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_YUV420_SEMI_PLANAR) {
-        if (outbuf == NULL) {
+        if (outbuf == NULL)
             // Temporary conversion buffer
             outbuf = malloc (vfbprop.width * vfbprop.height * 3);
-        }
 
         NV21ToRGB24(vfbs[idx][0], vfbprop.stride, vfbs[idx][1], vfbprop.stride, outbuf, vfbprop.width * 3, vfbprop.width, vfbprop.height);
-        imagedata_cb(vfbprop.width, vfbprop.height, outbuf);
     } else {
         ERR("[DILE_VT] Unsupported pixel format: %d", vfbprop.pixelFormat);
         for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
@@ -265,11 +269,13 @@ void capture_frame() {
         return;
     }
 
+    t6 = getticks_us();
+
     imagedata_cb(width, height, outbuf);
     t7 = getticks_us();
 
     if (framecount % 15 == 0) {
-        DBG("[DILE_VT] frame feed time: %.3fms", (t7 - t1) / 1000);
+        DBG("[DILE_VT] frame processing time: %.3fms; frame send time: %.3fms", (t6 - t1) / 1000.0, (t7 - t6) / 1000.0);
     }
 
     output_state.freezed = 0;
