@@ -273,6 +273,7 @@ static void handle_signal(int signal)
     case SIGINT:
         INFO("SIGINT called! Stopping capture if running..");
         app_quit = true;
+        g_main_loop_quit(gmainLoop);
         break;
     case SIGTERM:
         INFO("SIGTERM called! Stopping capture if running and exit..");
@@ -460,8 +461,9 @@ int main(int argc, char *argv[])
 
         bRetVal = LSRegister(SERVICE_NAME, &handle, &lserror);
         if (FALSE== bRetVal) {
+            ERR("Unable to register on Luna bus: %s", lserror.message);
             LSErrorFree( &lserror );
-            return 0;
+            return -1;
         }
         sh = LSMessageGetConnection(message);
 
