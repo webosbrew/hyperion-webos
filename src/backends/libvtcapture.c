@@ -120,7 +120,7 @@ int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback
     props.reg = resolution;
     props.buf_cnt = buf_cnt;
     if(config.fps == 0){
-        props.frm = 120;
+        props.frm = 60;
     }else{
         props.frm = config.fps;
     }
