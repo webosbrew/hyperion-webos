@@ -264,7 +264,7 @@ static bool cb_make_root(LSHandle *sh, LSMessage *msg, void *user_data){
 
 int make_root(LSHandle *handle){
     LSError lserror;
-    if(!LSCall(handle, "luna://org.webosbrew.hbchannel.service/exec","{\"command\":\"/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service org.webosbrew.piccap.service\"}", cb_make_root, NULL, NULL, &lserror)){
+    if(!LSCall(handle, "luna://org.webosbrew.hbchannel.service/exec","{\"command\":\"chmod +x /media/developer/apps/usr/palm/services/org.webosbrew.piccap.service/elevate-service; /media/developer/apps/usr/palm/services/org.webosbrew.piccap.service/elevate-service org.webosbrew.piccap.service\"}", cb_make_root, NULL, NULL, &lserror)){
         PmLogError(logcontext, "FNCMKROOT", 0, "Error while executing HBChannel/exec!");
         LSErrorPrint(&lserror, stderr);
         return 1;
