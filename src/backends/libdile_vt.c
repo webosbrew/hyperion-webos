@@ -227,6 +227,9 @@ void capture_frame() {
     uint32_t width = vfbprop.width;
     uint32_t height = vfbprop.height;
 
+    static uint8_t* uplane = NULL;
+    static uint8_t* vplane = NULL;
+    static uint8_t* argbvideo = NULL;
     static uint8_t* outbuf = NULL;
 
     if (use_vsync_thread) {
@@ -258,9 +261,30 @@ void capture_frame() {
     } else if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_YUV420_SEMI_PLANAR) {
         if (outbuf == NULL)
             // Temporary conversion buffer
-            outbuf = malloc (vfbprop.width * vfbprop.height * 3);
+            outbuf = malloc (width * height * 3);
 
-        NV21ToRGB24(vfbs[idx][0], vfbprop.stride, vfbs[idx][1], vfbprop.stride, outbuf, vfbprop.width * 3, vfbprop.width, vfbprop.height);
+        NV21ToRGB24(vfbs[idx][0], vfbprop.stride, vfbs[idx][1], vfbprop.stride, outbuf, width * 3, width, height);
+    } else if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_YUV422_SEMI_PLANAR) {
+        if (outbuf == NULL)
+            outbuf = malloc (3 * width * height);
+        if (argbvideo == NULL)
+            argbvideo = malloc(4 * width * height);
+        if (uplane == NULL)
+            uplane = malloc(width / 2 * height);
+        if (vplane == NULL)
+            vplane = malloc(width / 2 * height);
+
+        // This pixel format is called "NV16". While it is not supported as an
+        // ARGB target in libyuv, we just need to split interlaced uv values
+        // into two separate planes and this becomes I422 which is well
+        // supported.
+        // TODO: we use ARGB intermediate target, since I422ToRGB24 is not a
+        // thing. This is not much of a problem, since will be used later when
+        // UI layer blending will be introduced.
+
+        SplitUVPlane(vfbs[idx][1], vfbprop.stride, vplane, width/2, uplane, width/2, width/2, height);
+        I422ToARGB(vfbs[idx][0], vfbprop.stride, uplane, width/2, vplane, width/2, argbvideo, 4 * width, width, height);
+        ARGBToRGB24(argbvideo, 4 * width, outbuf, 3 * width, width, height);
     } else {
         ERR("[DILE_VT] Unsupported pixel format: %d", vfbprop.pixelFormat);
         for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
