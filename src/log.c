@@ -47,7 +47,7 @@ void log_printf(LogLevel level, const char* module, const char* fmt, ...) {
 
     char formatted[1024];
     vsnprintf(formatted, 1024, fmt, args);
-    _PmLogMsgKV(context, level, 0, module, 0, NULL, NULL, formatted);
+    _PmLogMsgKV(context, level, 0, level == Debug ? NULL : module, 0, NULL, NULL, formatted);
 
     if (level <= current_log_level) {
         fprintf(stderr, "%10.3fs %s[%4s %-20s]\x1b[0m %s\n", (getticks_us() - start)/1000000.0, color_str, level_str, module, formatted);
