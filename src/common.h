@@ -22,6 +22,7 @@ typedef struct _cap_backend_config {
     bool save_config;
     bool load_config;
     bool no_service;
+    bool verbose;
 } cap_backend_config_t;
 
 #if defined(CAPTURE_BACKEND)

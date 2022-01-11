@@ -15,9 +15,7 @@
 #include <halgal.h>
 
 #include "common.h"
-#include <PmLogLib.h>
-#include <glib.h>
-#include <glib-object.h>
+#include "log.h"
 
 pthread_mutex_t frame_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t capture_thread;
@@ -79,7 +77,6 @@ size_t len;
 char *addr;
 int fd;
 
-PmLogContext logcontext;
 
 VT_RESOLUTION_T resolution = {360, 180};
 
@@ -102,15 +99,14 @@ void NV21_TO_RGB24(unsigned char *yuyv, unsigned char *rgb, int width, int heigh
 void *capture_thread_target(void *data);
 
 int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback_t callback){
-    PmLogGetContext("hyperion-webos_service", &logcontext);
-    PmLogInfo(logcontext, "VTCPREINIT", 0, "Preinit called. Copying config..");
+    INFO("Preinit called. Copying config..");
     memcpy(&config, backend_config, sizeof(cap_backend_config_t));
     imagedata_cb = callback;
 
     resolution.w = config.resolution_width;
     resolution.h = config.resolution_height;
 
-    PmLogInfo(logcontext, "VTCPREINIT", 0, "Copying config done. Initialize vars..");
+    INFO("Copying config done. Initialize vars..");
     VT_DUMP_T dump = 2;
     VT_LOC_T loc = {0, 0};
     VT_BUF_T buf_cnt = 3;
@@ -136,43 +132,43 @@ int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback
     rect.h = resolution.h;
 
     flags.pflag = 0;
-    PmLogInfo(logcontext, "VTCPREINIT", 0, "Init finished.");
+    INFO("Init finished.");
     return 0;
 }
 
 
 int capture_init()
 {
-    PmLogInfo(logcontext, "VTCINIT", 0, "Initialization of capture devices..");
+    INFO("Initialization of capture devices..");
     if(config.no_gui != 1){
-        PmLogInfo(logcontext, "VTCINIT", 0, "Graphical capture enabled. Begin init..");
+        INFO("Graphical capture enabled. Begin init..");
         if ((done = HAL_GAL_Init()) != 0) {
-            PmLogError(logcontext, "VTCINIT", 0, "HAL_GAL_Init failed: %x", done);
+            ERR("HAL_GAL_Init failed: %x", done);
             return -1;
         }
-        PmLogInfo(logcontext, "VTCINIT", 0, "HAL_GAL_Init done! Exit: %d", done);   
+        INFO("HAL_GAL_Init done! Exit: %d", done);   
 
         if ((done = HAL_GAL_CreateSurface(resolution.w, resolution.h, 0, &surfaceInfo)) != 0) {
-            PmLogError(logcontext, "VTCINIT", 0, "HAL_GAL_CreateSurface failed: %x", done);
+            ERR("HAL_GAL_CreateSurface failed: %x", done);
             return -1;
         }
-        PmLogInfo(logcontext, "VTCINIT", 0, "HAL_GAL_CreateSurface done! SurfaceID: %d", surfaceInfo.vendorData);
+        INFO("HAL_GAL_CreateSurface done! SurfaceID: %d", surfaceInfo.vendorData);
 
         isrunning = 1;
 
         if ((done = HAL_GAL_CaptureFrameBuffer(&surfaceInfo)) != 0) {
-            PmLogError(logcontext, "VTCINIT", 0, "HAL_GAL_CaptureFrameBuffer failed: %x", done);
+            ERR("HAL_GAL_CaptureFrameBuffer failed: %x", done);
             return -1;
         }
-        PmLogInfo(logcontext, "VTCINIT", 0, "HAL_GAL_CaptureFrameBuffer done! %x", done);
+        INFO("HAL_GAL_CaptureFrameBuffer done! %x", done);
 
         fd = open("/dev/gfx",2);
         if (fd < 0){
-            PmLogError(logcontext, "VTCINIT", 0, "HAL_GAL: gfx open fail result: %d", fd);
+            ERR("HAL_GAL: gfx open fail result: %d", fd);
             return -1;
 
         }else{
-            PmLogInfo(logcontext, "VTCINIT", 0, "HAL_GAL: gfx open ok result: %d", fd);
+            INFO("HAL_GAL: gfx open ok result: %d", fd);
         }
 
         len = surfaceInfo.property;
@@ -180,31 +176,31 @@ int capture_init()
             len = surfaceInfo.height * surfaceInfo.pitch;
         }
 
-        PmLogInfo(logcontext, "VTCINIT", 0, "Halgal done!");
+        INFO("Halgal done!");
     }
 
     if(config.no_video != 1){
-        PmLogInfo(logcontext, "VTCINIT", 0, "Init video capture..");
+        INFO("Init video capture..");
         driver = vtCapture_create();
-        PmLogInfo(logcontext, "VTCINIT", 0, "Driver created!");
+        INFO("Driver created!");
 
         done = vtcapture_initialize();
         if (done == -1){
-            PmLogError(logcontext, "VTCINIT", 0, "vtcapture_initialize failed!");
+            ERR("vtcapture_initialize failed!");
             return -1;
         }else if (done == 11){
-            PmLogError(logcontext, "VTCINIT", 0, "vtcapture_initialize failed! No capture permissions!");
+            ERR("vtcapture_initialize failed! No capture permissions!");
             return 11;
         }else if (done == 17){
             vtcapture_initialized = false;
-            PmLogInfo(logcontext, "VTCINIT", 0, "vtcapture not ready yet!");
+            INFO("vtcapture not ready yet!");
         }else if (done == 0){
             vtcapture_initialized = true;
-            PmLogInfo(logcontext, "VTCINIT", 0, "vtcapture initialized!");
+            INFO("vtcapture initialized!");
         } 
     }
 
-    PmLogInfo(logcontext, "VTCINIT", 0, "Malloc vars..");
+    INFO("Malloc vars..");
     if(config.no_video != 1 && config.no_gui != 1) //Both
     {
         comsize = size0+size1; 
@@ -245,33 +241,33 @@ int capture_init()
         addr = (char *) mmap(0, len, 3, 1, fd, surfaceInfo.offset);
     }
 
-    PmLogInfo(logcontext, "VTCINIT", 0, "Malloc vars finished.");
+    INFO("Malloc vars finished.");
     capture_initialized = true;
     return 0;
 }
 
 int vtcapture_initialize(){
-    PmLogInfo(logcontext, "VTCVINIT", 0, "Starting vtcapture initialization.");
+    INFO("Starting vtcapture initialization.");
     int innerdone = 0;
     innerdone = vtCapture_init(driver, caller, client);
         if (innerdone == 17) {
-            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_init not ready yet return: %d", innerdone);
+            ERR("vtCapture_init not ready yet return: %d", innerdone);
             return 17;
         }else if (innerdone == 11){
-            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_init failed: %d Permission denied! Quitting...", innerdone);
+            ERR("vtCapture_init failed: %d Permission denied! Quitting...", innerdone);
             return 11;
         }else if (innerdone != 0){
-            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_init failed: %d Quitting...", innerdone);
+            ERR("vtCapture_init failed: %d Quitting...", innerdone);
             return -1;
         }
-        PmLogInfo(logcontext, "VTCVINIT", 0, "vtCapture_init done! Caller_ID: %s Client ID: %s", caller, client);
+        INFO("vtCapture_init done! Caller_ID: %s Client ID: %s", caller, client);
 
         innerdone = vtCapture_preprocess(driver, client, &props);
         if (innerdone != 0) {
-            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_preprocess failed: %x Quitting...", innerdone);
+            ERR("vtCapture_preprocess failed: %x Quitting...", innerdone);
             return -1;
         }
-        PmLogInfo(logcontext, "VTCVINIT", 0, "vtCapture_preprocess done!");
+        INFO("vtCapture_preprocess done!");
 
         innerdone = vtCapture_planeInfo(driver, client, &plane);
         if (innerdone == 0 ) {
@@ -283,10 +279,10 @@ int vtcapture_initialize(){
             activeregion = plane.activeregion;
             xa = activeregion.a, ya = activeregion.b, wa = activeregion.c, ha = activeregion.d;
         }else{
-            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_planeInfo failed: %xQuitting...", innerdone);
+            ERR("vtCapture_planeInfo failed: %xQuitting...", innerdone);
             return -1;
         }
-        PmLogInfo(logcontext, "VTCVINIT", 0, "vtCapture_planeInfo done! stride: %d Region: x: %d, y: %d, w: %d, h: %d Active Region: x: %d, y: %d w: %d h: %d", stride, x, y, w, h, xa, ya, wa, ha);
+        INFO("vtCapture_planeInfo done! stride: %d Region: x: %d, y: %d, w: %d, h: %d Active Region: x: %d, y: %d w: %d h: %d", stride, x, y, w, h, xa, ya, wa, ha);
 
         innerdone = vtCapture_process(driver, client);
         if (innerdone == 0){
@@ -294,10 +290,10 @@ int vtcapture_initialize(){
             capture_initialized = true;
         }else{
             isrunning = 0;
-            PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_process failed: %xQuitting...", innerdone);
+            ERR("vtCapture_process failed: %xQuitting...", innerdone);
             return -1;
         }
-        PmLogInfo(logcontext, "VTCVINIT", 0, "vtCapture_process done!");
+        INFO("vtCapture_process done!");
 
         int cnter = 0;
         do{
@@ -309,20 +305,20 @@ int vtcapture_initialize(){
                 size0 = buff.size0;
                 size1 = buff.size1;
             }else if (innerdone != 2){
-                PmLogError(logcontext, "VTCVINIT", 0, "vtCapture_currentCaptureBuffInfo failed: %x Quitting...", innerdone);
+                ERR("vtCapture_currentCaptureBuffInfo failed: %x Quitting...", innerdone);
                 capture_terminate();
                 return -1;
             }
             cnter++;
         }while(innerdone != 0);
-        PmLogInfo(logcontext, "VTCVINIT", 0, "vtCapture_currentCaptureBuffInfo done after %d tries! addr0: %p addr1: %p size0: %d size1: %d", cnter, addr0, addr1, size0, size1);
+        INFO("vtCapture_currentCaptureBuffInfo done after %d tries! addr0: %p addr1: %p size0: %d size1: %d", cnter, addr0, addr1, size0, size1);
 
-        PmLogInfo(logcontext, "VTCVINIT", 0, "vtcapture initialization finished.");
+        INFO("vtcapture initialization finished.");
         return 0;
 }
 
 int capture_start(){
-    PmLogInfo(logcontext, "VTCCPTSTART", 0, "Starting capture thread..");
+    INFO("Starting capture thread..");
     capture_run = true;
     if (pthread_create(&capture_thread, NULL, capture_thread_target, NULL) != 0) {
         return -1;
@@ -332,27 +328,27 @@ int capture_start(){
 
 int capture_cleanup()
 {
-    PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Capture cleanup...");
+    INFO("Capture cleanup...");
 
     int done;
     if(isrunning == 1){
-        PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Capture was running, freeing vars...");
+        INFO("Capture was running, freeing vars...");
         if(config.no_video != 1){ 
-            PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Freeing video vars...");
+            INFO("Freeing video vars...");
             free(combined);
         }
         if(config.no_gui != 1){
-            PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Freeing gui vars...");
+            INFO("Freeing gui vars...");
             munmap(addr, len);
             done = close(fd);
             if (done != 0){
-                PmLogError(logcontext, "VTCCPTCLEAN", 0, "gfx close fail result: %d", done);
+                ERR("gfx close fail result: %d", done);
             }else{
-                PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "gfx close ok result: %d", done);
+                INFO("gfx close ok result: %d", done);
             }
         }
 
-        PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Freeing video combination vars...");
+        INFO("Freeing video combination vars...");
         if(config.no_gui != 1 && config.no_video != 1){
             free(rgb2);
         }
@@ -361,7 +357,7 @@ int capture_cleanup()
         free(gesamt);
     }
     done = 0;
-    PmLogInfo(logcontext, "VTCCPTCLEAN", 0, "Finished capture cleanup..");
+    INFO("Finished capture cleanup..");
     return done;
 }
 
@@ -369,12 +365,12 @@ int capture_stop_hal()
 {
     int done = 0;
     isrunning = 0;
-    PmLogInfo(logcontext, "VTCHALSTOP", 0, "Stopping HAL capture...");
+    INFO("Stopping HAL capture...");
     if ((done = HAL_GAL_DestroySurface(&surfaceInfo)) != 0) {
-        PmLogError(logcontext, "VTCHALSTOP", 0, "HAL_GAL_DestroySurface failed: %d", done);
+        ERR("HAL_GAL_DestroySurface failed: %d", done);
         return done;
     }
-    PmLogInfo(logcontext, "VTCHALSTOP", 0, "HAL_GAL_DestroySurface done. Result: %d", done);
+    INFO("HAL_GAL_DestroySurface done. Result: %d", done);
     return done;
 }
 
@@ -382,14 +378,14 @@ int capture_stop_vt()
 {
     int done;
     isrunning = 0;
-    PmLogInfo(logcontext, "VTCVTSTOP", 0, "Stopping VT capture...");
+    INFO("Stopping VT capture...");
     done = vtCapture_stop(driver, client);
     if (done != 0)
     {
-        PmLogError(logcontext, "VTCVTSTOP", 0, "vtCapture_stop failed: %x", done);
+        ERR("vtCapture_stop failed: %x", done);
         return done;
     }
-    PmLogInfo(logcontext, "VTCVTSTOP", 0, "vtCapture_stop done!");
+    INFO("vtCapture_stop done!");
     return done;
 }
 
@@ -397,17 +393,17 @@ int capture_terminate()
 {
     int done;
 
-    PmLogInfo(logcontext, "VTCCPTTERM", 0, "Called termination of vtcapture");
+    INFO("Called termination of vtcapture");
 
     capture_run = false;
     pthread_join(capture_thread, NULL);
 
     if(config.no_video != 1 && vtcapture_initialized){
-        PmLogInfo(logcontext, "VTCCPTTERM", 0, "Video capture enabled - Also stopping..");
+        INFO("Video capture enabled - Also stopping..");
         done += capture_stop_vt();
     }
     if(config.no_gui != 1){
-        PmLogInfo(logcontext, "VTCCPTTERM", 0, "GUI capture enabled - Also stopping..");
+        INFO("GUI capture enabled - Also stopping..");
         done += capture_stop_hal();
     }
 
@@ -415,23 +411,23 @@ int capture_terminate()
         if (vtcapture_initialized) {
             done = vtCapture_postprocess(driver, client);
             if (done == 0){
-                PmLogInfo(logcontext, "VTCCPTTERM", 0, "vtCapture_postprocess done!");
+                INFO("vtCapture_postprocess done!");
                 done = vtCapture_finalize(driver, client);
                 if (done == 0) {
-                    PmLogInfo(logcontext, "VTCCPTTERM", 0, "vtCapture_finalize done!");
+                    INFO("vtCapture_finalize done!");
                     vtCapture_release(driver);
-                    PmLogInfo(logcontext, "VTCCPTTERM", 0, "Driver released!");
+                    INFO("Driver released!");
                     memset(&client,0,127);
-                    PmLogInfo(logcontext, "VTCCPTTERM", 0, "Finished capture termination!");
+                    INFO("Finished capture termination!");
                     return 0;
                 }
-                PmLogError(logcontext, "VTCCPTTERM", 0, "vtCapture_finalize failed: %x", done);
+                ERR("vtCapture_finalize failed: %x", done);
             }
             vtCapture_finalize(driver, client);
         }
         vtCapture_release(driver);
     }
-    PmLogError(logcontext, "VTCCPTTERM", 0, "Finishing with errors: %x!", done);
+    ERR("Finishing with errors: %x!", done);
     return -1;
 }
 
@@ -446,7 +442,7 @@ void capture_frame()
 {
     int indone = 0;
     if (!capture_initialized){
-        PmLogError(logcontext, "VTCCPTFRAME", 0, "Capture devices not initialized yet!");
+        ERR("Capture devices not initialized yet!");
         return;
     }
     pthread_mutex_lock(&frame_mutex);
@@ -462,7 +458,7 @@ void capture_frame()
 
     if(config.no_gui != 1){
         if ((indone = HAL_GAL_CaptureFrameBuffer(&surfaceInfo)) != 0) {
-            PmLogError(logcontext, "VTCCPTFRAME", 0, "HAL_GAL_CaptureFrameBuffer failed: %x", indone);
+            ERR("HAL_GAL_CaptureFrameBuffer failed: %x", indone);
             capture_terminate();
             return;
         }
@@ -512,16 +508,16 @@ void send_picture()
 
         if (config.no_video != 1 && vtfrmcnt > 200){
             vtfrmcnt = 0;
-            PmLogInfo(logcontext, "VTCSENDPIC", 0, "Try to init vtcapture again..");
+            INFO("Try to init vtcapture again..");
             if (vtcapture_initialize() == 0){
                 vtcapture_initialized = true;
-                PmLogInfo(logcontext, "VTCSENDPIC", 0, "Init possible. Terminating current capture..");
+                INFO("Init possible. Terminating current capture..");
                 capture_terminate();
-                PmLogInfo(logcontext, "VTCSENDPIC", 0, "Init possible. Cleanup current capture..");
+                INFO("Init possible. Cleanup current capture..");
                 capture_cleanup();
-                PmLogInfo(logcontext, "VTCSENDPIC", 0, "Init possible. Init capture..");
+                INFO("Init possible. Init capture..");
                 capture_init();
-                PmLogInfo(logcontext, "VTCSENDPIC", 0, "Init possible. Starting capture again..");
+                INFO("Init possible. Starting capture again..");
                 capture_start();
                 return;
             }
