@@ -38,7 +38,12 @@ bool vtcapture_initialized = false;
 bool restart = false;
 bool capture_run = false;
 int vtfrmcnt = 0;
-int isrunning = 0;
+int halitsrunning = 0;
+int vtitsrunning = 0;
+int halitsmalloc = 0;
+int vtitsmalloc = 0;
+int halvtitsmalloc = 0;
+int startuptries = 0;
 int done = 0;
 
 
@@ -116,7 +121,7 @@ int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback
     props.reg = resolution;
     props.buf_cnt = buf_cnt;
     if(config.fps == 0){
-        props.frm = 120;
+        props.frm = 60;
     }else{
         props.frm = config.fps;
     }
@@ -154,7 +159,7 @@ int capture_init()
         }
         INFO("HAL_GAL_CreateSurface done! SurfaceID: %d", surfaceInfo.vendorData);
 
-        isrunning = 1;
+        halitsrunning = 1;
 
         if ((done = HAL_GAL_CaptureFrameBuffer(&surfaceInfo)) != 0) {
             ERR("HAL_GAL_CaptureFrameBuffer failed: %x", done);
@@ -176,6 +181,20 @@ int capture_init()
             len = surfaceInfo.height * surfaceInfo.pitch;
         }
 
+        if (config.no_gui != 1 && config.no_video == 1) //GUI only
+        {
+            DBG("Malloc halgal vars...");
+
+            stride = surfaceInfo.pitch/4;
+            rgbsize = sizeof(combined)*stride*h*3;
+            gesamt = (char *) malloc(len);
+            rgb = (char *) malloc(len);
+            hal = (char *) malloc(len);
+            addr = (char *) mmap(0, len, 3, 1, fd, surfaceInfo.offset);
+            halitsmalloc = 1;
+            DBG("Malloc halgal vars finished.");
+        }
+
         INFO("Halgal done!");
     }
 
@@ -191,18 +210,33 @@ int capture_init()
         }else if (done == 11){
             ERR("vtcapture_initialize failed! No capture permissions!");
             return 11;
-        }else if (done == 17){
+        }else if (done == 17 || done == 1){
             vtcapture_initialized = false;
             INFO("vtcapture not ready yet!");
         }else if (done == 0){
             vtcapture_initialized = true;
             INFO("vtcapture initialized!");
         } 
+
+        if (config.no_video != 1 && config.no_gui == 1) //Video only
+        {
+            DBG("Malloc vt vars...");
+            comsize = size0+size1; 
+            combined = (char *) malloc(comsize);
+
+            rgbasize = sizeof(combined)*stride*h*4;
+            rgbsize = sizeof(combined)*stride*h*3;   
+            rgb = (char *) malloc(rgbsize);
+            rgbaout = (char *) malloc(rgbasize);
+            vtitsrunning = 1;
+            DBG("Malloc vt vars finished.");
+        }
     }
 
-    INFO("Malloc vars..");
+    
     if(config.no_video != 1 && config.no_gui != 1) //Both
     {
+        INFO("Malloc hal+vt vars..");
         comsize = size0+size1; 
         combined = (char *) malloc(comsize);
 
@@ -219,29 +253,10 @@ int capture_init()
         stride2 = surfaceInfo.pitch/4;
 
         addr = (char *) mmap(0, len, 3, 1, fd, surfaceInfo.offset);
-    }
-    else if (config.no_video != 1 && config.no_gui == 1) //Video only
-    {
-        comsize = size0+size1; 
-        combined = (char *) malloc(comsize);
-
-        rgbasize = sizeof(combined)*stride*h*4;
-        rgbsize = sizeof(combined)*stride*h*3;   
-        rgb = (char *) malloc(rgbsize);
-        rgbaout = (char *) malloc(rgbasize);
-    }
-    else if (config.no_gui != 1 && config.no_video == 1) //GUI only
-    {
-        stride = surfaceInfo.pitch/4;
-
-        rgbsize = sizeof(combined)*stride*h*3;
-        gesamt = (char *) malloc(len);
-        rgb = (char *) malloc(len);
-        hal = (char *) malloc(len);
-        addr = (char *) mmap(0, len, 3, 1, fd, surfaceInfo.offset);
+        halvtitsmalloc = 1;
+        INFO("Malloc hal+vt vars finished.");
     }
 
-    INFO("Malloc vars finished.");
     capture_initialized = true;
     return 0;
 }
@@ -250,71 +265,101 @@ int vtcapture_initialize(){
     INFO("Starting vtcapture initialization.");
     int innerdone = 0;
     innerdone = vtCapture_init(driver, caller, client);
-        if (innerdone == 17) {
-            ERR("vtCapture_init not ready yet return: %d", innerdone);
-            return 17;
-        }else if (innerdone == 11){
-            ERR("vtCapture_init failed: %d Permission denied! Quitting...", innerdone);
-            return 11;
-        }else if (innerdone != 0){
-            ERR("vtCapture_init failed: %d Quitting...", innerdone);
-            return -1;
-        }
-        INFO("vtCapture_init done! Caller_ID: %s Client ID: %s", caller, client);
+    if (innerdone == 17) {
+        ERR("vtCapture_init not ready yet return: %d", innerdone);
+        return 17;
+    }else if (innerdone == 11){
+        ERR("vtCapture_init failed: %d Permission denied! Quitting...", innerdone);
+        return 11;
+    }else if (innerdone != 0){
+        ERR("vtCapture_init failed: %d Quitting...", innerdone);
+        return -1;
+    }
+    INFO("vtCapture_init done! Caller_ID: %s Client ID: %s", caller, client);
 
-        innerdone = vtCapture_preprocess(driver, client, &props);
-        if (innerdone != 0) {
-            ERR("vtCapture_preprocess failed: %x Quitting...", innerdone);
-            return -1;
-        }
-        INFO("vtCapture_preprocess done!");
+    
+    //Donno why, but we have to skip first try after autostart. Otherwise only first frame is captured
+    if (startuptries < 1){
+        INFO("Skipping successfull vtCapture_init to prevent start after first try.");
+        startuptries++;
 
-        innerdone = vtCapture_planeInfo(driver, client, &plane);
-        if (innerdone == 0 ) {
-            stride = plane.stride;
-
-            region = plane.planeregion;
-            x = region.a, y = region.b, w = region.c, h = region.d;
-
-            activeregion = plane.activeregion;
-            xa = activeregion.a, ya = activeregion.b, wa = activeregion.c, ha = activeregion.d;
-        }else{
-            ERR("vtCapture_planeInfo failed: %xQuitting...", innerdone);
-            return -1;
-        }
-        INFO("vtCapture_planeInfo done! stride: %d Region: x: %d, y: %d, w: %d, h: %d Active Region: x: %d, y: %d w: %d h: %d", stride, x, y, w, h, xa, ya, wa, ha);
-
-        innerdone = vtCapture_process(driver, client);
-        if (innerdone == 0){
-            isrunning = 1;
-            capture_initialized = true;
-        }else{
-            isrunning = 0;
-            ERR("vtCapture_process failed: %xQuitting...", innerdone);
-            return -1;
-        }
-        INFO("vtCapture_process done!");
-
-        int cnter = 0;
-        do{
-            sleep(1/1000*100);
-            innerdone = vtCapture_currentCaptureBuffInfo(driver, &buff);
-            if (innerdone == 0 ) {
-                addr0 = buff.start_addr0;
-                addr1 = buff.start_addr1;
-                size0 = buff.size0;
-                size1 = buff.size1;
-            }else if (innerdone != 2){
-                ERR("vtCapture_currentCaptureBuffInfo failed: %x Quitting...", innerdone);
-                capture_terminate();
-                return -1;
+        done = vtCapture_postprocess(driver, client);
+        if (done == 0){
+            INFO("vtCapture_postprocess done!");
+            done = vtCapture_finalize(driver, client);
+            if (done == 0) {
+                INFO("vtCapture_finalize done!");
+            } else{
+                ERR("vtCapture_finalize failed: %x", done);
             }
-            cnter++;
-        }while(innerdone != 0);
-        INFO("vtCapture_currentCaptureBuffInfo done after %d tries! addr0: %p addr1: %p size0: %d size1: %d", cnter, addr0, addr1, size0, size1);
+        } else{
+            done = vtCapture_finalize(driver, client);
+            if (done == 0) {
+                INFO("vtCapture_finalize done!");
+            } else{
+                ERR("vtCapture_finalize failed: %x", done);
+            }
+        }
 
-        INFO("vtcapture initialization finished.");
-        return 0;
+        return 17; //Just simulate init failed
+    }
+
+    innerdone = vtCapture_preprocess(driver, client, &props);
+    if (innerdone == 1){
+        ERR("vtCapture_preprocess not ready yet return: %d", innerdone);
+        return 1;
+    }else if (innerdone != 0) {
+        ERR("vtCapture_preprocess failed: %x Quitting...", innerdone);
+        return -1;
+    }
+    INFO("vtCapture_preprocess done!");
+
+    innerdone = vtCapture_planeInfo(driver, client, &plane);
+    if (innerdone == 0 ) {
+        stride = plane.stride;
+
+        region = plane.planeregion;
+        x = region.a, y = region.b, w = region.c, h = region.d;
+
+        activeregion = plane.activeregion;
+        xa = activeregion.a, ya = activeregion.b, wa = activeregion.c, ha = activeregion.d;
+    }else{
+        ERR("vtCapture_planeInfo failed: %xQuitting...", innerdone);
+        return -1;
+    }
+    INFO("vtCapture_planeInfo done! stride: %d Region: x: %d, y: %d, w: %d, h: %d Active Region: x: %d, y: %d w: %d h: %d", stride, x, y, w, h, xa, ya, wa, ha);
+
+    innerdone = vtCapture_process(driver, client);
+    if (innerdone == 0){
+        vtitsrunning = 1;
+        capture_initialized = true;
+    }else{
+        vtitsrunning = 0;
+        ERR("vtCapture_process failed: %xQuitting...", innerdone);
+        return -1;
+    }
+    INFO("vtCapture_process done!");
+
+    int cnter = 0;
+    do{
+        sleep(1/1000*100);
+        innerdone = vtCapture_currentCaptureBuffInfo(driver, &buff);
+        if (innerdone == 0 ) {
+            addr0 = buff.start_addr0;
+            addr1 = buff.start_addr1;
+            size0 = buff.size0;
+            size1 = buff.size1;
+        }else if (innerdone != 2){
+            ERR("vtCapture_currentCaptureBuffInfo failed: %x Quitting...", innerdone);
+            capture_terminate();
+            return -1;
+        }
+        cnter++;
+    }while(innerdone != 0);
+    INFO("vtCapture_currentCaptureBuffInfo done after %d tries! addr0: %p addr1: %p size0: %d size1: %d", cnter, addr0, addr1, size0, size1);
+
+    INFO("vtcapture initialization finished.");
+    return 0;
 }
 
 int capture_start(){
@@ -331,13 +376,14 @@ int capture_cleanup()
     INFO("Capture cleanup...");
 
     int done;
-    if(isrunning == 1){
+    if(halitsmalloc == 1 || vtitsmalloc == 1){
         INFO("Capture was running, freeing vars...");
-        if(config.no_video != 1){ 
+        if(config.no_video != 1 && vtitsmalloc == 1){ 
             INFO("Freeing video vars...");
             free(combined);
+            vtitsmalloc = 0;
         }
-        if(config.no_gui != 1){
+        if(config.no_gui != 1 && halitsmalloc == 1){
             INFO("Freeing gui vars...");
             munmap(addr, len);
             done = close(fd);
@@ -346,11 +392,13 @@ int capture_cleanup()
             }else{
                 INFO("gfx close ok result: %d", done);
             }
+            halitsmalloc = 0;
         }
 
         INFO("Freeing video combination vars...");
-        if(config.no_gui != 1 && config.no_video != 1){
+        if(config.no_gui != 1 && config.no_video != 1 && halvtitsmalloc == 1){
             free(rgb2);
+            halvtitsmalloc = 0;
         }
         free(rgbaout);
         free(rgb);
@@ -364,7 +412,7 @@ int capture_cleanup()
 int capture_stop_hal()
 {
     int done = 0;
-    isrunning = 0;
+    halitsrunning = 0;
     INFO("Stopping HAL capture...");
     if ((done = HAL_GAL_DestroySurface(&surfaceInfo)) != 0) {
         ERR("HAL_GAL_DestroySurface failed: %d", done);
@@ -377,7 +425,7 @@ int capture_stop_hal()
 int capture_stop_vt()
 {
     int done;
-    isrunning = 0;
+    vtitsrunning = 0;
     INFO("Stopping VT capture...");
     done = vtCapture_stop(driver, client);
     if (done != 0)
@@ -395,8 +443,10 @@ int capture_terminate()
 
     INFO("Called termination of vtcapture");
 
-    capture_run = false;
-    pthread_join(capture_thread, NULL);
+    if (capture_run){
+        capture_run = false;
+        pthread_join(capture_thread, NULL);
+    }
 
     if(config.no_video != 1 && vtcapture_initialized){
         INFO("Video capture enabled - Also stopping..");
