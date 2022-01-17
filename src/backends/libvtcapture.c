@@ -13,6 +13,7 @@
 
 #include <vtcapture/vtCaptureApi_c.h>
 #include <halgal.h>
+#include <libyuv.h>
 
 #include "common.h"
 #include "log.h"
@@ -94,8 +95,6 @@ void capture_frame();
 void send_picture();
 int blend(unsigned char *result, unsigned char *fg, unsigned char *bg, int leng);
 int remalpha(unsigned char *result, unsigned char *rgba, int leng);
-void NV21_TO_RGBA(unsigned char *yuyv, unsigned char *rgba, int width, int height);
-void NV21_TO_RGB24(unsigned char *yuyv, unsigned char *rgb, int width, int height);
 void *capture_thread_target(void *data);
 
 int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback_t callback){
@@ -466,7 +465,7 @@ void capture_frame()
     }
     if(config.no_video != 1 && config.no_gui != 1 && vtcapture_initialized) //Both
     {
-        NV21_TO_RGBA(combined, rgbaout, stride, h);
+        NV21ToARGB(combined, stride, combined+size0, stride, rgbaout, w * 4, w, h);
         blend(gesamt, hal, rgbaout, len);
         remalpha(rgb, gesamt, len);
     }
@@ -475,7 +474,7 @@ void capture_frame()
     }
     else if (config.no_video != 1 && config.no_gui == 1 && vtcapture_initialized) //Video only
     {
-        NV21_TO_RGB24(combined, rgb, stride, h);
+        NV21ToRGB24(combined, stride, combined+size0, stride, rgb, w * 3, w, h);
     }
     else if (config.no_gui != 1 && config.no_video == 1) //GUI only
     {
@@ -542,9 +541,10 @@ int blend(unsigned char *result, unsigned char *fg, unsigned char *bg, int leng)
         alpha = fg[aIndex] + 1;
         iAlpha = 256 - fg[aIndex];
         
-        result[bIndex] = (unsigned char)((alpha * fg[bIndex] + iAlpha * bg[bIndex]) >> 8);;
-        result[gIndex] = (unsigned char)((alpha * fg[gIndex] + iAlpha * bg[gIndex]) >> 8);;
-        result[rIndex] = (unsigned char)((alpha * fg[rIndex] + iAlpha * bg[rIndex]) >> 8);;
+        // indices at bg are reversed because bg's order is rgba but fg's order is bgra
+        result[bIndex] = (unsigned char)((alpha * fg[bIndex] + iAlpha * bg[rIndex]) >> 8);
+        result[gIndex] = (unsigned char)((alpha * fg[gIndex] + iAlpha * bg[gIndex]) >> 8);
+        result[rIndex] = (unsigned char)((alpha * fg[rIndex] + iAlpha * bg[bIndex]) >> 8);
         result[aIndex] = 0xff;
     }
 }
@@ -568,84 +568,4 @@ int remalpha(unsigned char *result, unsigned char *rgba, int leng){
 
         j+=3;
     }
-}
-
-//Credits: https://www.programmersought.com/article/18954751423/
-void NV21_TO_RGBA(unsigned char *yuyv, unsigned char *rgba, int width, int height){
-        const int nv_start = width * height ;
-        int  index = 0, rgb_index = 0;
-        uint8_t y, u, v;
-        int r, g, b, nv_index = 0, i, j;
-        int a = 255;
- 
-        for(i = 0; i < height; i++){
-            for(j = 0; j < width; j ++){
-
-                nv_index = i / 2  * width + j - j % 2;
- 
-                y = yuyv[rgb_index];
-                u = yuyv[nv_start + nv_index ];
-                v = yuyv[nv_start + nv_index + 1];
- 
-                r = y + (140 * (v-128))/100;  //r
-                g = y - (34 * (u-128))/100 - (71 * (v-128))/100; //g
-                b = y + (177 * (u-128))/100; //b
- 
-                if(r > 255)   r = 255;
-                if(g > 255)   g = 255;
-                if(b > 255)   b = 255;
-                if(r < 0)     r = 0;
-                if(g < 0)     g = 0;
-                if(b < 0)     b = 0;
- 
-                index = rgb_index % width + (height - i - 1) * width;
- 
-                rgba[i * width * 4 + 4 * j + 0] = b;
-                rgba[i * width * 4 + 4 * j + 1] = g;
-                rgba[i * width * 4 + 4 * j + 2] = r;   
-                rgba[i * width * 4 + 4 * j + 3] = a;               
-                rgb_index++;
-
-            }
-        }
-}
-
-//Credits: https://www.programmersought.com/article/18954751423/
-void NV21_TO_RGB24(unsigned char *yuyv, unsigned char *rgb, int width, int height)
-{
-        const int nv_start = width * height ;
-        int  index = 0, rgb_index = 0;
-        uint8_t y, u, v;
-        int r, g, b, nv_index = 0,i, j;
- 
-        for(i = 0; i < height; i++){
-            for(j = 0; j < width; j ++){
-
-                nv_index = i / 2  * width + j - j % 2;
- 
-                y = yuyv[rgb_index];
-                u = yuyv[nv_start + nv_index ];
-                v = yuyv[nv_start + nv_index + 1];
- 
-                r = y + (140 * (v-128))/100;  //r
-                g = y - (34 * (u-128))/100 - (71 * (v-128))/100; //g
-                b = y + (177 * (u-128))/100; //b
- 
-                if(r > 255)   r = 255;
-                if(g > 255)   g = 255;
-                if(b > 255)   b = 255;
-                if(r < 0)     r = 0;
-                if(g < 0)     g = 0;
-                if(b < 0)     b = 0;
- 
-                index = rgb_index % width + (height - i - 1) * width;
-
-                rgb[i * width * 3 + 3 * j + 0] = r;
-                rgb[i * width * 3 + 3 * j + 1] = g;
-                rgb[i * width * 3 + 3 * j + 2] = b;
-
-                rgb_index++;
-
-            }
-        }
 }
