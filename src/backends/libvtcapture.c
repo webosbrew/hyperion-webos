@@ -457,7 +457,8 @@ void capture_frame()
     if(config.no_video != 1 && config.no_gui != 1 && vtcapture_initialized) //Both
     {
         // YUV -> ARGB
-        NV21ToARGB(videoY, stride, videoUV, stride, videoARGB, w * 4, w, h);
+        // NV21ToARGB(videoY, stride, videoUV, stride, videoARGB, w * 4, w, h);
+        NV21ToARGBMatrix(videoY, stride, videoUV, stride, videoARGB, w * 4, &kYuvH709Constants, w, h);
         // ABGR -> ARGB
         ABGRToARGB(guiABGR, w * 4, guiARGB, w * 4, w, h);
         // blend video and gui
@@ -475,7 +476,8 @@ void capture_frame()
     else if (config.no_video != 1 && config.no_gui == 1 && vtcapture_initialized) //Video only
     {
         // YUV -> RGB
-        NV21ToRGB24(videoY, stride, videoUV, stride, outRGB, w * 3, w, h);
+        // NV21ToRGB24(videoY, stride, videoUV, stride, outRGB, w * 3, w, h);
+        NV21ToRGB24Matrix(videoY, stride, videoUV, stride, outRGB, w * 3, &kYuvH709Constants, w, h);
     }
     else if (config.no_gui != 1 && config.no_video == 1) //GUI only
     {
