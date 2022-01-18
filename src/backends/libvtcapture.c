@@ -482,9 +482,9 @@ void capture_frame()
     else if (config.no_gui != 1 && config.no_video == 1) //GUI only
     {
         // ABGR -> ARGB
-        ABGRToARGB(guiABGR, w * 4, guiARGB, w * 4, w, h);
+        ABGRToARGB(guiABGR, surfaceInfo.width * 4, guiARGB, surfaceInfo.width * 4, surfaceInfo.width, surfaceInfo.height);
         // remove alpha channel
-        ARGBToRGB24(guiARGB, w * 4, outRGB, w * 3, w, h);
+        ARGBToRGB24(guiARGB, surfaceInfo.width * 4, outRGB, surfaceInfo.width * 3, surfaceInfo.width, surfaceInfo.height);
     }
     send_picture();
 
