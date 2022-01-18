@@ -46,38 +46,26 @@ int done = 0;
 _LibVtCaptureProperties props;
 
 _LibVtCapturePlaneInfo plane;
-int stride, stride2, x, y, w, h, xa, ya, wa, ha;
 VT_REGION_T region;
 VT_REGION_T activeregion;
 
 _LibVtCaptureBufferInfo buff;
 char *addr0, *addr1;
 int size0, size1;
-char *gesamt;
-int comsize;  
-char *combined;
-int rgbasize;
-int rgbsize;   
-char *rgbaout;   
-char *rgb;
-char *rgb2;
-char *hal;
+char *videoY;
+char *videoUV;
+char *videoARGB;
+char *guiABGR;
+char *guiARGB;
+char *outARGB;
+char *outRGB;
 
 //All
 int stride, x, y, w, h, xa, ya, wa, ha;
 
-int done;
-int ex;
-int file;
-
-int rIndex, gIndex, bIndex, aIndex;
-unsigned int alpha,iAlpha;
-int *nleng;
-
 size_t len; 
 char *addr;
 int fd;
-
 
 VT_RESOLUTION_T resolution = {360, 180};
 
@@ -136,6 +124,9 @@ int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback
 
 int capture_init()
 {
+    int rgbasize;
+    int rgbsize;
+
     INFO("Initialization of capture devices..");
     if(config.no_gui != 1){
         INFO("Graphical capture enabled. Begin init..");
@@ -200,41 +191,43 @@ int capture_init()
     INFO("Malloc vars..");
     if(config.no_video != 1 && config.no_gui != 1) //Both
     {
-        comsize = size0+size1; 
-        combined = (char *) malloc(comsize);
+        videoY = (char *) malloc(size0);
+        videoUV = (char *) malloc(size1);
 
-        rgbasize = sizeof(combined)*stride*h*4;
-        rgbsize = sizeof(combined)*stride*h*3;   
-        rgbaout = (char *) malloc(rgbasize); 
+        rgbasize = sizeof(char) * stride * h * 4;
+        rgbsize = sizeof(char) * stride * h * 3;
 
+        videoARGB = (char *) malloc(rgbasize); 
+        guiABGR = (char *) malloc(len);
+        guiARGB = (char *) malloc(len);
+        outARGB = (char *) malloc(len);
+        outRGB = (char *) malloc(rgbsize);
 
-        rgb = (char *) malloc(rgbsize);
-        rgb2 = (char *) malloc(len);
-        gesamt = (char *) malloc(len);
-        hal = (char *) malloc(len);
-
-        stride2 = surfaceInfo.pitch/4;
+        stride = surfaceInfo.pitch/4;
 
         addr = (char *) mmap(0, len, 3, 1, fd, surfaceInfo.offset);
     }
     else if (config.no_video != 1 && config.no_gui == 1) //Video only
     {
-        comsize = size0+size1; 
-        combined = (char *) malloc(comsize);
+        videoY = (char *) malloc(size0);
+        videoUV = (char *) malloc(size1);
 
-        rgbasize = sizeof(combined)*stride*h*4;
-        rgbsize = sizeof(combined)*stride*h*3;   
-        rgb = (char *) malloc(rgbsize);
-        rgbaout = (char *) malloc(rgbasize);
+        rgbasize = sizeof(char)*stride*h*4;
+        rgbsize = sizeof(char)*stride*h*3;
+
+        videoARGB = (char *) malloc(rgbasize); 
+        outRGB = (char *) malloc(rgbsize);
     }
     else if (config.no_gui != 1 && config.no_video == 1) //GUI only
     {
         stride = surfaceInfo.pitch/4;
+        rgbsize = sizeof(char) * stride * h * 3;
 
-        rgbsize = sizeof(combined)*stride*h*3;
-        gesamt = (char *) malloc(len);
-        rgb = (char *) malloc(len);
-        hal = (char *) malloc(len);
+        guiABGR = (char *) malloc(len);
+        guiARGB = (char *) malloc(len);
+        outARGB = (char *) malloc(len);
+        outRGB = (char *) malloc(len);
+
         addr = (char *) mmap(0, len, 3, 1, fd, surfaceInfo.offset);
     }
 
@@ -332,7 +325,8 @@ int capture_cleanup()
         INFO("Capture was running, freeing vars...");
         if(config.no_video != 1){ 
             INFO("Freeing video vars...");
-            free(combined);
+            free(videoY);
+            free(videoUV);
         }
         if(config.no_gui != 1){
             INFO("Freeing gui vars...");
@@ -346,12 +340,11 @@ int capture_cleanup()
         }
 
         INFO("Freeing video combination vars...");
-        if(config.no_gui != 1 && config.no_video != 1){
-            free(rgb2);
-        }
-        free(rgbaout);
-        free(rgb);
-        free(gesamt);
+        free(videoARGB);
+        free(guiABGR);
+        free(guiARGB);
+        free(outARGB);
+        free(outRGB);
     }
     done = 0;
     INFO("Finished capture cleanup..");
@@ -449,8 +442,8 @@ void capture_frame()
     last_ticks = ticks;
 
     if(config.no_video != 1 && vtcapture_initialized){
-        memcpy(combined, addr0, size0);
-        memcpy(combined+size0, addr1, size1);
+        memcpy(videoY, addr0, size0);
+        memcpy(videoUV, addr1, size1);
     }
 
     if(config.no_gui != 1){
@@ -459,30 +452,37 @@ void capture_frame()
             capture_terminate();
             return;
         }
-        memcpy(hal,addr,len);
+        memcpy(guiABGR,addr,len);
     }
     if(config.no_video != 1 && config.no_gui != 1 && vtcapture_initialized) //Both
     {
-        NV21ToARGB(combined, stride, combined+size0, stride, rgbaout, w * 4, w, h);
+        // YUV -> ARGB
+        NV21ToARGB(videoY, stride, videoUV, stride, videoARGB, w * 4, w, h);
+        // ABGR -> ARGB
+        ABGRToARGB(guiABGR, w * 4, guiARGB, w * 4, w, h);
         // blend video and gui
-        ABGRToARGB(hal, w * 4, rgb, w * 4, w, h);
-        ARGBBlend(rgb, w * 4, rgbaout, w * 4, gesamt, w * 4, w, h);
+        ARGBBlend(guiARGB, w * 4, videoARGB, w * 4, outARGB, w * 4, w, h);
         // remove alpha channel
-        ARGBToRGB24(gesamt, w * 4, rgb, w * 3, w, h);
+        ARGBToRGB24(outARGB, w * 4, outRGB, w * 3, w, h);
     }
     else if(config.no_video != 1 && config.no_gui != 1 && !vtcapture_initialized) //Both, but vt not ready
     {
+        // ABGR -> ARGB
+        ABGRToARGB(guiABGR, w * 4, guiARGB, w * 4, w, h);
         // remove alpha channel
-        ARGBToRGB24(hal, w * 4, rgb2, w * 3, w, h);
+        ARGBToRGB24(guiARGB, w * 4, outRGB, w * 3, w, h);
     }
     else if (config.no_video != 1 && config.no_gui == 1 && vtcapture_initialized) //Video only
     {
-        NV21ToRGB24(combined, stride, combined+size0, stride, rgb, w * 3, w, h);
+        // YUV -> RGB
+        NV21ToRGB24(videoY, stride, videoUV, stride, outRGB, w * 3, w, h);
     }
     else if (config.no_gui != 1 && config.no_video == 1) //GUI only
     {
+        // ABGR -> ARGB
+        ABGRToARGB(guiABGR, w * 4, guiARGB, w * 4, w, h);
         // remove alpha channel
-        ARGBToRGB24(hal, w * 4, rgb, w * 3, w, h);
+        ARGBToRGB24(guiARGB, w * 4, outRGB, w * 3, w, h);
     }
     send_picture();
 
@@ -505,9 +505,9 @@ void send_picture()
 {
 //    fprintf(stderr, "[Client] hyperion_set_image\n");
     if (vtcapture_initialized || (config.no_video == 1 && config.no_gui != 1)){
-        imagedata_cb(stride, resolution.h, rgb); //GUI /GUI+VT /VT
+        imagedata_cb(stride, resolution.h, outRGB); //GUI /GUI+VT /VT
     } else {
-        imagedata_cb(stride2, resolution.h, rgb2); //GUI+VT_notReady
+        imagedata_cb(stride, resolution.h, outRGB); //GUI+VT_notReady
 
         if (config.no_video != 1 && vtfrmcnt > 200){
             vtfrmcnt = 0;
