@@ -216,7 +216,10 @@ int capture_init()
         }else if (done == 0){
             vtcapture_initialized = true;
             INFO("vtcapture initialized!");
-        } 
+        } else{
+            ERR("vtcapture_initialize failed! Something not covered happend! Returncode: %d", done);
+            return -2;
+        }
 
         if (config.no_video != 1 && config.no_gui == 1) //Video only
         {
@@ -342,7 +345,7 @@ int vtcapture_initialize(){
 
     int cnter = 0;
     do{
-        sleep(1/1000*100);
+        usleep(100000);
         innerdone = vtCapture_currentCaptureBuffInfo(driver, &buff);
         if (innerdone == 0 ) {
             addr0 = buff.start_addr0;
