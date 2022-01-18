@@ -93,8 +93,6 @@ int capture_cleanup();
 uint64_t getticks_us();
 void capture_frame();
 void send_picture();
-int blend(unsigned char *result, unsigned char *fg, unsigned char *bg, int leng);
-int remalpha(unsigned char *result, unsigned char *rgba, int leng);
 void *capture_thread_target(void *data);
 
 int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback_t callback){
@@ -466,11 +464,16 @@ void capture_frame()
     if(config.no_video != 1 && config.no_gui != 1 && vtcapture_initialized) //Both
     {
         NV21ToARGB(combined, stride, combined+size0, stride, rgbaout, w * 4, w, h);
-        blend(gesamt, hal, rgbaout, len);
-        remalpha(rgb, gesamt, len);
+        // blend video and gui
+        ABGRToARGB(hal, w * 4, rgb, w * 4, w, h);
+        ARGBBlend(rgb, w * 4, rgbaout, w * 4, gesamt, w * 4, w, h);
+        // remove alpha channel
+        ARGBToRGB24(gesamt, w * 4, rgb, w * 3, w, h);
     }
-    else if(config.no_video != 1 && config.no_gui != 1 && !vtcapture_initialized){ //Both, but vt not ready
-        remalpha(rgb2, hal, len);
+    else if(config.no_video != 1 && config.no_gui != 1 && !vtcapture_initialized) //Both, but vt not ready
+    {
+        // remove alpha channel
+        ARGBToRGB24(hal, w * 4, rgb2, w * 3, w, h);
     }
     else if (config.no_video != 1 && config.no_gui == 1 && vtcapture_initialized) //Video only
     {
@@ -478,7 +481,8 @@ void capture_frame()
     }
     else if (config.no_gui != 1 && config.no_video == 1) //GUI only
     {
-        remalpha(rgb, hal, len);
+        // remove alpha channel
+        ARGBToRGB24(hal, w * 4, rgb, w * 3, w, h);
     }
     send_picture();
 
@@ -528,44 +532,5 @@ void send_picture()
 void* capture_thread_target(void* data) {
     while (capture_run) {
         capture_frame();
-    }
-}
-
-int blend(unsigned char *result, unsigned char *fg, unsigned char *bg, int leng){
-    for (int i = 0; i < leng; i += 4){
-        bIndex = i;
-        gIndex = i + 1;
-        rIndex = i + 2;
-        aIndex = i + 3;
-
-        alpha = fg[aIndex] + 1;
-        iAlpha = 256 - fg[aIndex];
-        
-        // indices at bg are reversed because bg's order is rgba but fg's order is bgra
-        result[bIndex] = (unsigned char)((alpha * fg[bIndex] + iAlpha * bg[rIndex]) >> 8);
-        result[gIndex] = (unsigned char)((alpha * fg[gIndex] + iAlpha * bg[gIndex]) >> 8);
-        result[rIndex] = (unsigned char)((alpha * fg[rIndex] + iAlpha * bg[bIndex]) >> 8);
-        result[aIndex] = 0xff;
-    }
-}
-
-int remalpha(unsigned char *result, unsigned char *rgba, int leng){
-    int j = 0;
-    int b,g,r;
-    for (int i = 0; i < leng; i += 4){
-        bIndex = i;
-        gIndex = i + 1;
-        rIndex = i + 2;
-        aIndex = i + 3;
-
-        b = j;
-        g = j+1;
-        r = j+2;
-        
-        result[r] = rgba[bIndex];
-        result[g] = rgba[gIndex];
-        result[b] = rgba[rIndex];
-
-        j+=3;
     }
 }
