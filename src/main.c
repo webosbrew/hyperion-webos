@@ -565,6 +565,7 @@ int capture_main(){
     if ((ret = backend.capture_init()) != 0)
     {
         ERR("Error! capture_init: %d", ret);
+        isrunning = false;
         cleanup();
         return -1;
     }
@@ -621,7 +622,6 @@ void *connection_loop(void *data){
         exit(0);
     }
 
-    isrunning = false;
     cleanup();
 
     DBG("Connection loop exiting");
@@ -629,7 +629,7 @@ void *connection_loop(void *data){
 }
 
 int cleanup(){
-    DBG("Starting cleanup...");
+    DBG("Starting cleanup... isRunning: %d", isrunning);
     if (isrunning){
         DBG("Capture is running! Breaking loop and joining thread...");
         app_quit=true;
@@ -802,17 +802,18 @@ int save_settings(const char *savestring){
         retvalue = 1;
     }
 
+
     DBG("Autostart: %d", autostart);
+    char *startpath = "/var/lib/webosbrew/init.d/piccapautostart";
+    char *startupdir = "/var/lib/webosbrew/init.d";
+    char origpath[FILENAME_MAX];
+    char *autostartfile = "piccapautostart";
+
+    strcpy(origpath, basepath);
+    strcat(origpath, autostartfile);
+
     if (autostart){
-        DBG("Autostart enabled. Checking symlink.");
-        char *startpath = "/var/lib/webosbrew/init.d/piccapautostart";
-        char *startupdir = "/var/lib/webosbrew/init.d";
-        char origpath[FILENAME_MAX];
-        char *autostartfile = "piccapautostart";
-
-        strcat(origpath, basepath);
-        strcat(origpath, autostartfile);
-
+        DBG("Autostart enabled. Checking symlink..");
         if(access(startpath, F_OK) == 0){
             DBG("Autostart enabled. Symlink to HBChannel init.d already exists. Nothing to do");
         }else{
@@ -824,6 +825,19 @@ int save_settings(const char *savestring){
             }else{
                 INFO("Symlink created.");
             }
+        }
+    }else{
+        DBG("Autostart disabled. Checkking if file has to be removed..");
+        if(access(startpath, F_OK) == 0){
+            DBG("Autostart enabled, but is now set to false. Trying to remove symlink to HBChannel inid.d...");
+            if(unlink(startpath) != 0){
+                ERR("Error while deleting symlink!");
+                retvalue = 3;
+            }else{
+                DBG("Symlink removed.");
+            }
+        }else{
+            INFO("Autostart disabled. Nothing to do.");
         }
     }
 
