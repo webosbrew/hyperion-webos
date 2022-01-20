@@ -92,9 +92,18 @@ int capture_start()
 {
     INFO("Capture start called.");
     vth = DILE_VT_Create(0);
+
+    if (vth == NULL && &DILE_VT_CreateEx != 0) {
+        WARN("DILE_VT_Create failed, attempting DILE_VT_CreateEx");
+        vth = DILE_VT_CreateEx(0, 1);
+    }
+
     if (vth == NULL) {
+        WARN("Failed to get DILE_VT context!");
         return -1;
     }
+
+    DBG("Got DILE_VT context!");
 
     DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_LIMITATION limitation;
     if (DILE_VT_GetVideoFrameOutputDeviceLimitation(vth, &limitation) != 0) {
