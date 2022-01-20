@@ -54,7 +54,7 @@ add_library(vtcapture_backend SHARED
 
 target_compile_definitions(vtcapture_backend PRIVATE CAPTURE_BACKEND)
 target_include_directories(vtcapture_backend PRIVATE src src/backends)
-target_link_libraries(vtcapture_backend vtcapture halgal)
+target_link_libraries(vtcapture_backend vtcapture halgal yuv)
 
 add_library(dile_vt_backend SHARED
     src/backends/libdile_vt.c
