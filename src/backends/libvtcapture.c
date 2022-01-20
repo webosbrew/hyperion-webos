@@ -263,6 +263,7 @@ int capture_init()
         
         halitsmalloc = 1;
         vtitsmalloc = 1;
+
         INFO("Malloc hal+vt vars finished.");
     }
 
@@ -329,7 +330,6 @@ int vtcapture_initialize(){
 
         region = plane.planeregion;
         x = region.a, y = region.b, w = region.c, h = region.d;
-
         activeregion = plane.activeregion;
         xa = activeregion.a, ya = activeregion.b, wa = activeregion.c, ha = activeregion.d;
     }else{
