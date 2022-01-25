@@ -103,12 +103,14 @@ int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback
     props.loc = loc;
     props.reg = resolution;
     props.buf_cnt = buf_cnt;
-    if(config.fps == 0){
-        props.frm = 60;
-    }else{
-        props.frm = config.fps;
+
+    // Sorry, no unlimited fps for you.
+    if (config.fps == 0){
+        config.fps = 60;
     }
-    
+
+    props.frm = config.fps;
+
     //Halgal
     settings.srcblending1 = 2; //default = 2(1-10 possible) - blend? setting
     settings.dstblending2 = 0;
@@ -505,10 +507,6 @@ void capture_frame()
         return;
     }
     pthread_mutex_lock(&frame_mutex);
-    static uint32_t framecount = 0;
-    static uint64_t last_ticks = 0, fps_ticks = 0;
-    uint64_t ticks = getticks_us();
-    last_ticks = ticks;
 
     if(config.no_video != 1 && vtcapture_initialized){
         memcpy(videoY, addr0, size0);
@@ -558,18 +556,6 @@ void capture_frame()
     }
     send_picture();
 
-    framecount++;
-    if (fps_ticks == 0)
-    {
-        fps_ticks = ticks;
-    }
-    else if (ticks - fps_ticks >= 1000000)
-    {
-//            printf("[Stat] Send framerate: %d\n",
-//                framecount);
-        framecount = 0;
-        fps_ticks = ticks;
-    }
     pthread_mutex_unlock(&frame_mutex);
 }
 
@@ -602,7 +588,23 @@ void send_picture()
 }
 
 void* capture_thread_target(void* data) {
+    uint64_t frame_counter = 0;
+    uint64_t frame_counter_start = getticks_us();
     while (capture_run) {
+        uint64_t frame_start = getticks_us();
         capture_frame();
+        int64_t wait_time = (1000000 / config.fps) - (getticks_us() - frame_start);
+
+        if (wait_time > 0)
+            usleep(wait_time);
+
+        frame_counter += 1;
+
+        if (frame_counter >= 60) {
+            double fps = (frame_counter * 1000000.0) / (getticks_us() - frame_counter_start);
+            DBG("framerate: %.6f FPS", fps);
+            frame_counter = 0;
+            frame_counter_start = getticks_us();
+        }
     }
 }
