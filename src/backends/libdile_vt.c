@@ -201,6 +201,10 @@ int capture_start()
         for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
             DBG("[DILE_VT] vfb[%d][%d] = 0x%08x", vfb, plane, vfbprop.ptr[vfb][plane]);
             vfbs[vfb][plane] = (uint8_t*) mmap(0, vfbprop.stride * vfbprop.height, PROT_READ, MAP_SHARED, mem_fd, vfbprop.ptr[vfb][plane]);
+            if (vfbs[vfb][plane] == (void*) -1) {
+                WARN("Failed to mmap vfb: %i, plane: %i", vfb, plane);
+                return -13;
+            }
         }
     }
 
