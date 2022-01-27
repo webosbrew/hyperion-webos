@@ -5,7 +5,7 @@
 
 uint64_t start = 0;
 PmLogContext context;
-LogLevel current_log_level = Info;
+LogLevel current_log_level = Debug; // Info;
 
 uint64_t getticks_us()
 {

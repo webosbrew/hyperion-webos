@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
 
 /*
  * Callback for submitting new image data to hyperion
@@ -39,16 +40,16 @@ typedef struct _cap_backend_config {
 /*
  * Function pointers for usage by dlopen in main app
  */
-typedef int (*capture_preinit_t)(cap_backend_config_t*, cap_imagedata_callback_t);
-typedef int (*capture_init_t)(void);
-typedef int (*capture_start_t)(void);
-typedef int (*capture_terminate_t)(void);
-typedef int (*capture_cleanup_t)(void);
-
+// DEPRECATED
+typedef int (*legacy_capture_preinit_t)(cap_backend_config_t*, cap_imagedata_callback_t);
+typedef int (*legacy_capture_init_t)(void);
+typedef int (*legacy_capture_start_t)(void);
+typedef int (*legacy_capture_terminate_t)(void);
+typedef int (*legacy_capture_cleanup_t)(void);
 typedef struct _cap_backend_funcs {
-    capture_preinit_t capture_preinit;
-    capture_init_t capture_init;
-    capture_start_t capture_start;
-    capture_terminate_t capture_terminate;
-    capture_cleanup_t capture_cleanup;
+    legacy_capture_preinit_t capture_preinit;
+    legacy_capture_init_t capture_init;
+    legacy_capture_start_t capture_start;
+    legacy_capture_terminate_t capture_terminate;
+    legacy_capture_cleanup_t capture_cleanup;
 } cap_backend_funcs_t;

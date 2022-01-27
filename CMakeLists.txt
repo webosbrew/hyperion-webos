@@ -39,11 +39,41 @@ target_include_directories(hyperion-webos PRIVATE fbs)
 target_link_libraries(hyperion-webos flatccrt pthread dl ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
 set_property(TARGET hyperion-webos PROPERTY ENABLE_EXPORTS 1)
 
-# Backends
+add_executable(unicapture-test
+    src/unicapture-test.c
+    src/unicapture.c
+    src/log.c
+)
+set_target_properties(unicapture-test PROPERTIES
+    BUILD_RPATH_USE_ORIGIN ON
+    INSTALL_RPATH "$ORIGIN:$ORIGIN/lib"
+    BUILD_RPATH "$ORIGIN:$ORIGIN/lib"
+)
+target_link_libraries(unicapture-test pthread dl yuv ${PMLOG_LDFLAGS})
+set_property(TARGET unicapture-test PROPERTY ENABLE_EXPORTS 1)
+
+# "Unified" v2 Backends
+add_library(unigm_backend SHARED
+    src/backends/uni_libgm.c
+)
+target_include_directories(unigm_backend PRIVATE src src/backends)
+target_link_libraries(unigm_backend gm)
+
+add_library(unidile_vt_backend SHARED
+    src/backends/uni_libdile_vt.c
+)
+target_include_directories(unidile_vt_backend PRIVATE src src/backends)
+target_link_libraries(unidile_vt_backend dile_vt)
+
+# libdile_vt.so seems to be missing DT_NEEDED for libPmLogLib.so.3 - let's just
+# add it over to our library. For some reason adding PmLogLib loaded via
+# pkgconfig to target_link_libraries doesn't work...
+set_target_properties(unidile_vt_backend PROPERTIES LINK_FLAGS "-lPmLogLib")
+
+# Legacy backends
 add_library(vt_backend SHARED
     src/backends/libvt.c
 )
-
 target_compile_definitions(vt_backend PRIVATE CAPTURE_BACKEND)
 target_include_directories(vt_backend PRIVATE src src/backends)
 target_link_libraries(vt_backend vt ${GLESv2_LIBRARIES} ${EGL_LIBRARIES})
@@ -51,7 +81,6 @@ target_link_libraries(vt_backend vt ${GLESv2_LIBRARIES} ${EGL_LIBRARIES})
 add_library(vtcapture_backend SHARED
     src/backends/libvtcapture.c
 )
-
 target_compile_definitions(vtcapture_backend PRIVATE CAPTURE_BACKEND)
 target_include_directories(vtcapture_backend PRIVATE src src/backends)
 target_link_libraries(vtcapture_backend vtcapture halgal yuv)
@@ -59,7 +88,6 @@ target_link_libraries(vtcapture_backend vtcapture halgal yuv)
 add_library(dile_vt_backend SHARED
     src/backends/libdile_vt.c
 )
-
 target_compile_definitions(dile_vt_backend PRIVATE CAPTURE_BACKEND)
 target_include_directories(dile_vt_backend PRIVATE src src/backends)
 target_link_libraries(dile_vt_backend dile_vt yuv)
