@@ -16,10 +16,14 @@ int main(int argc, char** argv) {
 
     if (unicapture_try_backends(&config, &ui_capture, ui_backends) == 0) {
         up.ui_capture = &ui_capture;
+    } else {
+        up.ui_capture = NULL;
     }
 
     if (unicapture_try_backends(&config, &video_capture, video_backends) == 0) {
         up.video_capture = &video_capture;
+    } else {
+        up.video_capture = NULL;
     }
 
     INFO("Initialized!");

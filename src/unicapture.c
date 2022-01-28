@@ -229,8 +229,11 @@ int unicapture_run(unicapture_state_t* this) {
         uint64_t frame_wait = getticks_us();
 
         frame_info_t ui_frame = {PIXFMT_INVALID};
+        frame_info_t ui_frame_converted = {PIXFMT_INVALID};
         frame_info_t video_frame = {PIXFMT_INVALID};
+        frame_info_t video_frame_converted = {PIXFMT_INVALID};
 
+        // Capture frames
         if (ui_capture_ready) {
             if ((ret = ui_capture->acquire_frame(ui_capture->state, &ui_frame)) != 0) {
                 ui_frame.pixel_format = PIXFMT_INVALID;
@@ -245,10 +248,9 @@ int unicapture_run(unicapture_state_t* this) {
         }
 
         uint64_t frame_acquired = getticks_us();
+        // TODO fastpaths handling?
 
-        frame_info_t ui_frame_converted;
-        frame_info_t video_frame_converted;
-
+        // Convert frame to suitable video formats
         if (ui_frame.pixel_format != PIXFMT_INVALID) {
             converter_run(&ui_converter, &ui_frame, &ui_frame_converted, PIXFMT_ARGB);
         }
@@ -259,6 +261,7 @@ int unicapture_run(unicapture_state_t* this) {
 
         uint64_t frame_converted = getticks_us();
 
+        // Blend frames and prepare for sending
         if (video_frame_converted.pixel_format != PIXFMT_INVALID && ui_frame_converted.pixel_format != PIXFMT_INVALID) {
             int width = video_frame_converted.width;
             int height = video_frame_converted.height;
