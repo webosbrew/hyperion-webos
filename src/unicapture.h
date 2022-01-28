@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <pthread.h>
 #include "common.h"
 
 typedef enum _pixel_format {
@@ -54,6 +55,7 @@ typedef int (*capture_release_frame_t)(void*, frame_info_t*);
 typedef int (*capture_cleanup_t)(void*);
 
 typedef struct _capture_backend {
+    char* name;
     void* state;
 
     capture_init_t init;
@@ -68,6 +70,16 @@ typedef struct _capture_backend {
     capture_release_frame_t release_frame;
 } capture_backend_t;
 
-int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* backend, char* name);
+typedef struct _unicapture_state {
+    capture_backend_t* ui_capture;
+    capture_backend_t* video_capture;
 
-int unicapture_run(capture_backend_t* ui_capture, capture_backend_t* video_capture);
+    bool vsync_thread_running;
+    pthread_t vsync_thread;
+    pthread_mutex_t vsync_lock;
+    pthread_cond_t vsync_cond;
+} unicapture_state_t;
+
+int unicapture_try_backends(cap_backend_config_t* config, capture_backend_t* backend, char** candidates);
+int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* backend, char* name);
+int unicapture_run(unicapture_state_t* this);

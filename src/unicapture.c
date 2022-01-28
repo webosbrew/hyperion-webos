@@ -125,6 +125,8 @@ int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* bac
     char* error;
     void* handle = dlopen(name, RTLD_LAZY);
 
+    DBG("%s: loading...", name);
+
     if (handle == NULL) {
         WARN("Unable to load %s: %s", name, dlerror());
         return -1;
@@ -143,11 +145,50 @@ int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* bac
 
     backend->wait = dlsym(handle, "capture_wait"); DLSYM_ERROR_CHECK();
 
-    DBG("Backend loaded, initializing...");
-    return backend->init(config, &backend->state);
+    DBG("%s: loaded, initializing...", name);
+
+    int ret = backend->init(config, &backend->state);
+
+    if (ret == 0) {
+        backend->name = strdup(name);
+        DBG("%s: success", name);
+    }
+
+    return ret;
 }
 
-int unicapture_run(capture_backend_t* ui_capture, capture_backend_t* video_capture) {
+int unicapture_try_backends(cap_backend_config_t* config, capture_backend_t* backend, char** candidates) {
+    for (int i = 0; candidates[i] != NULL; i++) {
+        if (unicapture_init_backend(config, backend, candidates[i]) == 0) return 0;
+    }
+
+    return -1;
+}
+
+void* unicapture_vsync_handler(void* data) {
+    unicapture_state_t* this = (unicapture_state_t*) data;
+
+    INFO("vsync thread starting...");
+
+    while (this->vsync_thread_running) {
+        if (this->video_capture && this->video_capture->wait) {
+            this->video_capture->wait(this->video_capture->state);
+        } else {
+            DBG("Using fallback wait...");
+            usleep (1000000 / 30);
+        }
+        pthread_mutex_lock(&this->vsync_lock);
+        pthread_cond_signal(&this->vsync_cond);
+        pthread_mutex_unlock(&this->vsync_lock);
+    }
+
+    INFO("vsync thread finished");
+}
+
+int unicapture_run(unicapture_state_t* this) {
+    capture_backend_t* ui_capture = this->ui_capture;
+    capture_backend_t* video_capture = this->video_capture;
+
     bool ui_capture_ready = ui_capture != NULL;
     bool video_capture_ready = video_capture != NULL;
 
@@ -168,17 +209,22 @@ int unicapture_run(capture_backend_t* ui_capture, capture_backend_t* video_captu
         video_capture->start(video_capture->state);
     }
 
+    pthread_mutex_init(&this->vsync_lock, NULL);
+    pthread_cond_init(&this->vsync_cond, NULL);
+
+    uint8_t* blended_frame = NULL;
+    uint8_t* final_frame = NULL;
+
+    this->vsync_thread_running = true;
+    pthread_create(&this->vsync_thread, NULL, unicapture_vsync_handler, this);
+
     while (true) {
         int ret = 0;
         uint64_t frame_start = getticks_us();
-        if (video_capture_ready && video_capture->wait) {
-            video_capture->wait(video_capture->state);
-        // } else if (false && ui_capture_ready && ui_capture->wait) {
-        //    ui_capture->wait(ui_capture->state);
-        } else {
-            DBG("Using fallback wait...");
-            usleep (1000000 / 30);
-        }
+
+        pthread_mutex_lock(&this->vsync_lock);
+        pthread_cond_wait(&this->vsync_cond, &this->vsync_lock);
+        pthread_mutex_unlock(&this->vsync_lock);
 
         uint64_t frame_wait = getticks_us();
 
@@ -211,6 +257,34 @@ int unicapture_run(capture_backend_t* ui_capture, capture_backend_t* video_captu
             converter_run(&video_converter, &video_frame, &video_frame_converted, PIXFMT_ARGB);
         }
 
+        uint64_t frame_converted = getticks_us();
+
+        if (video_frame_converted.pixel_format != PIXFMT_INVALID && ui_frame_converted.pixel_format != PIXFMT_INVALID) {
+            int width = video_frame_converted.width;
+            int height = video_frame_converted.height;
+
+            blended_frame = realloc(blended_frame, width * height * 4);
+            final_frame = realloc(final_frame, width * height * 3);
+
+            ARGBBlend(
+                ui_frame_converted.planes[0].buffer,
+                ui_frame_converted.planes[0].stride,
+                video_frame_converted.planes[0].buffer,
+                video_frame_converted.planes[0].stride,
+                blended_frame,
+                4 * width,
+                width,
+                height
+            );
+        } else if (ui_frame_converted.pixel_format != PIXFMT_INVALID) {
+            // TODO
+        } else if (video_frame_converted.pixel_format != PIXFMT_INVALID) {
+            // TODO
+        } else {
+            WARN("No valid frame to send...");
+        }
+
+
         uint64_t frame_processed = getticks_us();
 
         uint64_t frame_sent = getticks_us();
@@ -226,23 +300,45 @@ int unicapture_run(capture_backend_t* ui_capture, capture_backend_t* video_captu
         framecounter += 1;
         if (framecounter >= 60) {
             double fps = (framecounter * 1000000.0) / (getticks_us() - framecounter_start);
-            INFO("Framerate: %.6f FPS; timings - wait: %lldus, acquire: %lldus, process; %lldus, send: %lldus",
-                    fps, frame_wait - frame_start, frame_acquired - frame_wait, frame_processed - frame_acquired, frame_sent - frame_processed);
+            INFO("Framerate: %.6f FPS; timings - wait: %lldus, acquire: %lldus, convert: %lldus, process; %lldus, send: %lldus",
+                    fps, frame_wait - frame_start, frame_acquired - frame_wait, frame_converted - frame_acquired, frame_processed - frame_converted, frame_sent - frame_processed);
 
-            INFO("   UI: pixfmt: %d; %dx%d", ui_frame.pixel_format, ui_frame.width, ui_frame.height);
-            INFO("VIDEO: pixfmt: %d; %dx%d", video_frame.pixel_format, video_frame.width, video_frame.height);
+            INFO("        UI: pixfmt: %d; %dx%d", ui_frame.pixel_format, ui_frame.width, ui_frame.height);
+            INFO("     VIDEO: pixfmt: %d; %dx%d", video_frame.pixel_format, video_frame.width, video_frame.height);
+            INFO("CONV    UI: pixfmt: %d; %dx%d", ui_frame_converted.pixel_format, ui_frame_converted.width, ui_frame_converted.height);
+            INFO("CONV VIDEO: pixfmt: %d; %dx%d", video_frame_converted.pixel_format, video_frame_converted.width, video_frame_converted.height);
 
             framecounter = 0;
             framecounter_start = getticks_us();
         }
     }
 
+    INFO("Shutting down...");
+
+    if (this->vsync_thread_running) {
+        DBG("Waiting for vsync thread to finish...");
+        this->vsync_thread_running = false;
+        pthread_join(this->vsync_thread, NULL);
+    }
+
     if (ui_capture_ready) {
+        DBG("Terminating UI capture...");
         ui_capture->terminate(ui_capture->state);
     }
 
     if (video_capture_ready) {
+        DBG("Terminating Video capture...");
         video_capture->terminate(video_capture->state);
+    }
+
+    if (final_frame != NULL) {
+        free(final_frame);
+        final_frame = NULL;
+    }
+
+    if (blended_frame != NULL) {
+        free(blended_frame);
+        blended_frame = NULL;
     }
 
     converter_release(&ui_converter);

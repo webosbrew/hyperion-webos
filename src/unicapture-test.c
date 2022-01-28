@@ -9,11 +9,22 @@ int main(int argc, char** argv) {
     capture_backend_t ui_capture;
     capture_backend_t video_capture;
 
-    unicapture_init_backend(&config, &ui_capture, "libunigm_backend.so");
-    unicapture_init_backend(&config, &video_capture, "libunidile_vt_backend.so");
+    char* ui_backends[] = {"libunigm_backend.so", NULL};
+    char* video_backends[] = {"libunidile_vt_backend.so", NULL};
+
+    unicapture_state_t up;
+
+    if (unicapture_try_backends(&config, &ui_capture, ui_backends) == 0) {
+        up.ui_capture = &ui_capture;
+    }
+
+    if (unicapture_try_backends(&config, &video_capture, video_backends) == 0) {
+        up.video_capture = &video_capture;
+    }
+
     INFO("Initialized!");
 
-    unicapture_run(&ui_capture, &video_capture);
+    unicapture_run(&up);
 
     ui_capture.cleanup(ui_capture.state);
     video_capture.cleanup(video_capture.state);
