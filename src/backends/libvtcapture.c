@@ -603,6 +603,13 @@ void* capture_thread_target(void* data) {
         if (frame_counter >= 60) {
             double fps = (frame_counter * 1000000.0) / (getticks_us() - frame_counter_start);
             DBG("framerate: %.6f FPS", fps);
+
+            // Fix for double capture thread
+            if (pthread_self() != capture_thread) {
+                DBG("We are not the main thread, exiting");
+                pthread_exit(NULL);
+            }
+
             frame_counter = 0;
             frame_counter_start = getticks_us();
         }
