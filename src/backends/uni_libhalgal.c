@@ -7,6 +7,7 @@
 #include "unicapture.h"
 #include "log.h"
 
+
 typedef struct _halgal_backend_state {
     int width;
     int height;
@@ -16,7 +17,9 @@ typedef struct _halgal_backend_state {
     int mem_fd;
 } halgal_backend_state_t;
 
-int capture_init(cap_backend_config_t* config, void** state_p) {
+
+int capture_init(cap_backend_config_t* config, void** state_p)
+{
     int ret = 0;
 
     halgal_backend_state_t* this = calloc(1, sizeof(halgal_backend_state_t));
@@ -78,31 +81,39 @@ err_mmap:
 err_destroy:
     HAL_GAL_DestroySurface(&this->surface_info);
     free(this);
+
     return ret;
 }
 
-int capture_cleanup(void* state) {
+int capture_cleanup(void* state)
+{
     halgal_backend_state_t* this = (halgal_backend_state_t*) state;
+
     HAL_GAL_DestroySurface(&this->surface_info);
     munmap(this->mem_addr, this->num_bytes);
     close(this->mem_fd);
     free(this);
+
     return 0;
 }
 
-int capture_start(void* state) { 
+int capture_start(void* state)
+{ 
     return 0;
 }
 
-int capture_terminate(void* state) {
+int capture_terminate(void* state)
+{
     return 0;
 }
 
-int capture_acquire_frame(void* state, frame_info_t* frame) {
+int capture_acquire_frame(void* state, frame_info_t* frame)
+{
     halgal_backend_state_t* this = (halgal_backend_state_t*) state;
     int ret = 0;
 
     if ((ret = HAL_GAL_CaptureFrameBuffer(&this->surface_info)) != 0) {
+
         ERR("HAL_GAL_CaptureFrameBuffer failed: %x", ret);
         return ret;
     }
@@ -116,10 +127,12 @@ int capture_acquire_frame(void* state, frame_info_t* frame) {
     return 0;
 }
 
-int capture_release_frame(void* state, frame_info_t* frame) {
+int capture_release_frame(void* state, frame_info_t* frame)
+{
     return 0;
 }
 
-int capture_wait(void* state) {
+int capture_wait(void* state)
+{
     return 0;
 }
