@@ -14,6 +14,7 @@ typedef struct _vtcapture_backend_state {
     VT_CLIENTID_T client[128];
     _LibVtCaptureBufferInfo buff;
     char *curr_buff;
+    bool terminate;
 } vtcapture_backend_state_t;
 
 
@@ -102,6 +103,8 @@ int capture_init(cap_backend_config_t* config, void** state_p)
             plane.stride, plane.planeregion.a, plane.planeregion.b, plane.planeregion.c, plane.planeregion.d, 
             plane.activeregion.a, plane.activeregion.b, plane.activeregion.c, plane.activeregion.d);
 
+    this->terminate = false;
+
     INFO("vtcapture initialization finished.");
 
     *state_p = this;
@@ -109,23 +112,26 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     return 0;
 
 err_destroy:
-    INFO("DESTROY");
     if (this->driver) {
+        
         vtCapture_postprocess(this->driver, this->client);
         vtCapture_finalize(this->driver, this->client);
         vtCapture_release(this->driver);
     }
     free(this);
+
     return ret;
 }
 
 int capture_cleanup(void* state)
 {
     vtcapture_backend_state_t* this = (vtcapture_backend_state_t*) state;
+
     vtCapture_postprocess(this->driver, this->client);
     vtCapture_finalize(this->driver, this->client);
     vtCapture_release(this->driver);
     free(this);
+
     return 0;
 }
 
@@ -168,7 +174,10 @@ int capture_start(void* state)
 int capture_terminate(void* state)
 {    
     vtcapture_backend_state_t* this = (vtcapture_backend_state_t*) state;
+
+    this->terminate = true;
     vtCapture_stop(this->driver, this->client);
+
     return 0;
 }
 
@@ -205,7 +214,7 @@ int capture_wait(void* state)
     vtcapture_backend_state_t* this = (vtcapture_backend_state_t*) state;
 
     // wait until buffer address changed
-    while (true) {
+    while (!this->terminate) {
     
         if (vtCapture_currentCaptureBuffInfo(this->driver, &this->buff) != 0 ) {
 
