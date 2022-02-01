@@ -196,7 +196,7 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
     frame->height = this->height;
     frame->planes[0].buffer = this->buff.start_addr0;
     frame->planes[0].stride = this->stride;
-    frame->planes[1].buffer = this->buff.start_addr0;
+    frame->planes[1].buffer = this->buff.start_addr1;
     frame->planes[1].stride = this->stride;
 
     this->curr_buff = this->buff.start_addr0;
