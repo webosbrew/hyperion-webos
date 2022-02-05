@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <math.h>
 
 #include <sys/mman.h>
 #include <sys/time.h>
@@ -24,6 +25,7 @@ pthread_t vsync_thread = NULL;
 pthread_mutex_t vsync_lock;
 pthread_cond_t vsync_cond;
 
+int vsync_count = 1;
 bool use_vsync_thread = true;
 bool capture_running = true;
 
@@ -138,20 +140,20 @@ int capture_start()
     output_state.freezed = 0;
     output_state.appliedPQ = 0;
 
-    // Framerate provided by libdile_vt is dependent on content currently played
-    // (50/60fps). We don't have any better way of limiting FPS, so let's just
-    // average it out - if someone sets their preferred framerate to 30 and
-    // content was 50fps, we'll just end up feeding 25 frames per second.
-    output_state.framerate = config.fps == 0 ? 1 : 60 / config.fps;
-    INFO("[DILE_VT] framerate divider: %d", output_state.framerate);
-
     DILE_VT_WaitVsync(vth, 0, 0);
     uint64_t t1 = getticks_us();
     DILE_VT_WaitVsync(vth, 0, 0);
     uint64_t t2 = getticks_us();
 
-    double fps = 1000000.0 / (t2 - t1);
-    INFO("[DILE_VT] frametime: %d; estimated fps before divider: %.5f", (uint32_t) (t2 - t1), fps);
+    double raw_fps = 1000000.0 / (t2 - t1);
+    INFO("[DILE_VT] frametime: %d; estimated fps before divider: %.5f", (uint32_t) (t2 - t1), raw_fps);
+
+    // Framerate provided by libdile_vt is dependent on content currently played
+    // (50/60fps). We don't have any better way of limiting FPS, so let's just
+    // average it out - if someone sets their preferred framerate to 30 and
+    // content was 50fps, we'll just end up feeding 25 frames per second.
+    output_state.framerate = config.fps == 0 ? 1 : round((1.0f * raw_fps) / config.fps);
+    INFO("[DILE_VT] framerate divider: %d", output_state.framerate);
 
     // Set framerate divider
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FRAMERATE_DIVIDE, &output_state) != 0) {
@@ -163,8 +165,15 @@ int capture_start()
     DILE_VT_WaitVsync(vth, 0, 0);
     t2 = getticks_us();
 
-    fps = 1000000.0 / (t2 - t1);
+    double fps = 1000000.0 / (t2 - t1);
     INFO("[DILE_VT] frametime: %d; estimated fps after divider: %.5f", (uint32_t) (t2 - t1), fps);
+
+    if (output_state.framerate > 1 && round(fps / (raw_fps / output_state.framerate)) != 1) {
+        vsync_count = round (fps / (raw_fps / output_state.framerate));
+        WARN("[DILE_VT] vsync misbehaviour, using vsync_count = %d", vsync_count);
+    } else {
+        vsync_count = 1;
+    }
 
     // Set freeze
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &output_state) != 0) {
@@ -330,7 +339,10 @@ void* capture_thread_target(void* data) {
 void* vsync_thread_target(void* data) {
     INFO("vsync_thread_target called.");
     while (capture_running) {
-        DILE_VT_WaitVsync(vth, 0, 0);
+        for (int i = 0; i < vsync_count; i++) {
+            DILE_VT_WaitVsync(vth, 0, 0);
+        }
+
         pthread_mutex_lock(&vsync_lock);
         pthread_cond_signal(&vsync_cond);
         pthread_mutex_unlock(&vsync_lock);
