@@ -24,7 +24,6 @@ typedef struct _converter {
     uint8_t* buffers[4];
 } converter_t;
 
-
 void converter_init(converter_t* this) {
     for (int i = 0; i < 4; i++) {
         this->buffers[i] = NULL;
@@ -225,7 +224,6 @@ int unicapture_run(unicapture_state_t* this) {
         pthread_mutex_lock(&this->vsync_lock);
         pthread_cond_wait(&this->vsync_cond, &this->vsync_lock);
         pthread_mutex_unlock(&this->vsync_lock);
-
         uint64_t frame_wait = getticks_us();
 
         frame_info_t ui_frame = {PIXFMT_INVALID};
@@ -261,10 +259,14 @@ int unicapture_run(unicapture_state_t* this) {
 
         uint64_t frame_converted = getticks_us();
 
+        bool got_frame = true;
+        int width = 0;
+        int height = 0;
+
         // Blend frames and prepare for sending
         if (video_frame_converted.pixel_format != PIXFMT_INVALID && ui_frame_converted.pixel_format != PIXFMT_INVALID) {
-            int width = video_frame_converted.width;
-            int height = video_frame_converted.height;
+            width = video_frame_converted.width;
+            height = video_frame_converted.height;
 
             blended_frame = realloc(blended_frame, width * height * 4);
             final_frame = realloc(final_frame, width * height * 3);
@@ -279,16 +281,57 @@ int unicapture_run(unicapture_state_t* this) {
                 width,
                 height
             );
+            ARGBToRGB24(
+                blended_frame,
+                4 * width,
+                final_frame,
+                3 * width,
+                width,
+                height
+            );
         } else if (ui_frame_converted.pixel_format != PIXFMT_INVALID) {
-            // TODO
+            width = ui_frame_converted.width;
+            height = ui_frame_converted.height;
+
+            final_frame = realloc(final_frame, width * height * 3);
+
+            ARGBToRGB24(
+                ui_frame_converted.planes[0].buffer,
+                ui_frame_converted.planes[0].stride,
+                final_frame,
+                3 * width,
+                width,
+                height
+            );
         } else if (video_frame_converted.pixel_format != PIXFMT_INVALID) {
-            // TODO
+            width = video_frame_converted.width;
+            height = video_frame_converted.height;
+
+            final_frame = realloc(final_frame, width * height * 3);
+
+            ARGBToRGB24(
+                video_frame_converted.planes[0].buffer,
+                video_frame_converted.planes[0].stride,
+                final_frame,
+                3 * width,
+                width,
+                height
+            );
         } else {
+            got_frame = false;
             WARN("No valid frame to send...");
         }
 
-
         uint64_t frame_processed = getticks_us();
+
+        if (got_frame && framecounter % 30 == 0) {
+            char filename[256];
+            snprintf(filename, sizeof(filename), "/tmp/hyperion-webos-dump.%03d.data", (int) (framecounter / 30) % 10);
+            FILE* fd = fopen(filename, "wb");
+            fwrite(final_frame, 3 * width * height, 1, fd);
+            fclose(fd);
+            INFO("Buffer dumped to: %s", filename);
+        }
 
         uint64_t frame_sent = getticks_us();
 
@@ -300,19 +343,23 @@ int unicapture_run(unicapture_state_t* this) {
             video_capture->release_frame(video_capture->state, &video_frame);
         }
 
-        framecounter += 1;
-        if (framecounter >= 60) {
-            double fps = (framecounter * 1000000.0) / (getticks_us() - framecounter_start);
-            INFO("Framerate: %.6f FPS; timings - wait: %lldus, acquire: %lldus, convert: %lldus, process; %lldus, send: %lldus",
-                    fps, frame_wait - frame_start, frame_acquired - frame_wait, frame_converted - frame_acquired, frame_processed - frame_converted, frame_sent - frame_processed);
+        uint64_t frame_released = getticks_us();
 
-            INFO("        UI: pixfmt: %d; %dx%d", ui_frame.pixel_format, ui_frame.width, ui_frame.height);
-            INFO("     VIDEO: pixfmt: %d; %dx%d", video_frame.pixel_format, video_frame.width, video_frame.height);
-            INFO("CONV    UI: pixfmt: %d; %dx%d", ui_frame_converted.pixel_format, ui_frame_converted.width, ui_frame_converted.height);
-            INFO("CONV VIDEO: pixfmt: %d; %dx%d", video_frame_converted.pixel_format, video_frame_converted.width, video_frame_converted.height);
+        if (got_frame) {
+            framecounter += 1;
 
-            framecounter = 0;
-            framecounter_start = getticks_us();
+            if (framecounter % 60 == 0) {
+                double fps = (60 * 1000000.0) / (getticks_us() - framecounter_start);
+                INFO("Framerate: %.6f FPS; timings - wait: %lldus, acquire: %lldus, convert: %lldus, process; %lldus, send: %lldus, release: %lldus",
+                        fps, frame_wait - frame_start, frame_acquired - frame_wait, frame_converted - frame_acquired, frame_processed - frame_converted, frame_sent - frame_processed, frame_released - frame_sent);
+
+                INFO("        UI: pixfmt: %d; %dx%d", ui_frame.pixel_format, ui_frame.width, ui_frame.height);
+                INFO("     VIDEO: pixfmt: %d; %dx%d", video_frame.pixel_format, video_frame.width, video_frame.height);
+                INFO("CONV    UI: pixfmt: %d; %dx%d", ui_frame_converted.pixel_format, ui_frame_converted.width, ui_frame_converted.height);
+                INFO("CONV VIDEO: pixfmt: %d; %dx%d", video_frame_converted.pixel_format, video_frame_converted.width, video_frame_converted.height);
+
+                framecounter_start = getticks_us();
+            }
         }
     }
 

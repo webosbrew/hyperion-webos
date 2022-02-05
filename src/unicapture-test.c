@@ -5,12 +5,12 @@ int main(int argc, char** argv) {
     log_init();
     INFO("Hello world!");
 
-    cap_backend_config_t config = {30, 0, 1920 / 5, 1080 / 5};
+    cap_backend_config_t config = {30, 0, 240, 135}; // 1920 / 5, 1080 / 5};
     capture_backend_t ui_capture;
     capture_backend_t video_capture;
 
-    char* ui_backends[] = {"libunigm_backend.so", NULL};
-    char* video_backends[] = {"libunidile_vt_backend.so", NULL};
+    char* ui_backends[] = {"libgm_backend.so", NULL};
+    char* video_backends[] = {"libdile_vt_backend.so", NULL};
 
     unicapture_state_t up;
 
