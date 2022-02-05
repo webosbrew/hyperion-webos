@@ -91,16 +91,11 @@ int capture_cleanup() {
 int capture_start()
 {
     INFO("Capture start called.");
+    vth = DILE_VT_Create(0);
 
-    if (&DILE_VT_CreateEx != 0) {
+    if (vth == NULL && &DILE_VT_CreateEx != 0) {
+        WARN("DILE_VT_Create failed, attempting DILE_VT_CreateEx");
         vth = DILE_VT_CreateEx(0, 1);
-        if (vth == NULL) {
-            WARN("DILE_VT_CreateEx failed, attempting DILE_VT_Create...");
-        }
-    }
-
-    if (vth == NULL) {
-        vth = DILE_VT_Create(0);
     }
 
     if (vth == NULL) {
