@@ -80,6 +80,12 @@ typedef struct _unicapture_state {
     pthread_cond_t vsync_cond;
 } unicapture_state_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 int unicapture_try_backends(cap_backend_config_t* config, capture_backend_t* backend, char** candidates);
 int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* backend, char* name);
-int unicapture_run(unicapture_state_t* this);
+int unicapture_run(unicapture_state_t* state);
+#ifdef __cplusplus
+}
+#endif

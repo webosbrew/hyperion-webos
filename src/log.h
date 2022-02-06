@@ -2,6 +2,10 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     Error = 3,
     Warning = 4,
@@ -18,3 +22,7 @@ void log_printf(LogLevel level, const char* module, const char* fmt, ...);
 #define WARN(...) LOG(Warning, __VA_ARGS__)
 #define INFO(...) LOG(Info, __VA_ARGS__)
 #define DBG(...) LOG(Debug, __VA_ARGS__)
+
+#ifdef __cplusplus
+}
+#endif

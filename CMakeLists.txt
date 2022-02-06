@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.6)
-project(hyperion-webos VERSION 1.0 LANGUAGES C)
+project(hyperion-webos VERSION 1.0 LANGUAGES C CXX)
 
 add_subdirectory(libyuv)
 add_subdirectory(tv-native-apis)
@@ -77,7 +77,7 @@ target_include_directories(halgal_backend PRIVATE src src/backends)
 target_link_libraries(halgal_backend halgal)
 
 add_library(vtcapture_backend SHARED
-    src/backends/libvtcapture.c
+    src/backends/libvtcapture.cpp
 )
 target_include_directories(vtcapture_backend PRIVATE src src/backends)
 target_link_libraries(vtcapture_backend vtcapture)
