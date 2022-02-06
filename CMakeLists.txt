@@ -70,6 +70,18 @@ target_link_libraries(dile_vt_backend dile_vt)
 # pkgconfig to target_link_libraries doesn't work...
 set_target_properties(dile_vt_backend PROPERTIES LINK_FLAGS "-lPmLogLib")
 
+add_library(unihalgal_backend SHARED
+    src/backends/uni_libhalgal.c
+)
+target_include_directories(unihalgal_backend PRIVATE src src/backends)
+target_link_libraries(unihalgal_backend halgal)
+
+add_library(univtcapture_backend SHARED
+    src/backends/uni_libvtcapture.c
+)
+target_include_directories(univtcapture_backend PRIVATE src src/backends)
+target_link_libraries(univtcapture_backend vtcapture)
+
 # Legacy backends
 add_library(vt_legacy_backend SHARED
     src/backends/libvt_legacy.c
