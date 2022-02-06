@@ -26,7 +26,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 {
     int ret = 0;
     VT_RESOLUTION_T resolution = {config->resolution_width, config->resolution_height};
-    VT_DUMP_T dump = 2;
+    VT_DUMP_T dump = 1;
     VT_LOC_T loc = {0, 0};
     VT_BUF_T buf_cnt = 3;
     const VT_CALLER_T *caller = "hyperion-webos_service";
@@ -99,8 +99,8 @@ int capture_init(cap_backend_config_t* config, void** state_p)
         ret = -7; goto err_destroy;
     }
 
-    self->width = plane.activeregion.c;
-    self->height = plane.activeregion.d;
+    self->width = plane.planeregion.c;
+    self->height = plane.planeregion.d;
     self->stride = plane.stride;
 
     INFO("vtCapture_planeInfo done! stride: %d Region: x: %d, y: %d, w: %d, h: %d Active Region: x: %d, y: %d w: %d h: %d", 
@@ -188,8 +188,9 @@ int capture_terminate(void* state)
 int capture_acquire_frame(void* state, frame_info_t* frame)
 {
     vtcapture_backend_state_t* self = (vtcapture_backend_state_t*) state;
+    _LibVtCaptureBufferInfo buff;
 
-    if (vtCapture_currentCaptureBuffInfo(self->driver, &self->buff) != 0 ) {
+    if (vtCapture_currentCaptureBuffInfo(self->driver, &buff) != 0 ) {
 
         ERR("vtCapture_currentCaptureBuffInfo() failed.");
         return -1;
@@ -198,9 +199,9 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
     frame->pixel_format = PIXFMT_YUV420_SEMI_PLANAR; // ToDo: I guess?!
     frame->width = self->width;
     frame->height = self->height;
-    frame->planes[0].buffer = self->buff.start_addr0;
+    frame->planes[0].buffer = buff.start_addr0;
     frame->planes[0].stride = self->stride;
-    frame->planes[1].buffer = self->buff.start_addr1;
+    frame->planes[1].buffer = buff.start_addr1;
     frame->planes[1].stride = self->stride;
 
     self->curr_buff = self->buff.start_addr0;
@@ -219,7 +220,6 @@ int capture_wait(void* state)
 
     // wait until buffer address changed
     while (!self->terminate) {
-    
         if (vtCapture_currentCaptureBuffInfo(self->driver, &self->buff) != 0 ) {
 
             ERR("vtCapture_currentCaptureBuffInfo() failed.");
@@ -229,8 +229,10 @@ int capture_wait(void* state)
         if (self->curr_buff != self->buff.start_addr0)
             break;
 
-        usleep(10000);
+        usleep(100);
     }
+
+    self->curr_buff = self->buff.start_addr0;
 
     return 0;
 }
