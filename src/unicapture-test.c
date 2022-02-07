@@ -14,6 +14,7 @@ int main(int argc, char** argv) {
     char* video_backends[] = {"libvtcapture_backend.so", "libdile_vt_backend.so", NULL};
 
     unicapture_state_t up;
+    unicapture_init(&up);
 
     if (unicapture_try_backends(&config, &ui_capture, ui_backends) == 0) {
         up.ui_capture = &ui_capture;
@@ -29,7 +30,15 @@ int main(int argc, char** argv) {
 
     INFO("Initialized!");
 
-    unicapture_run(&up);
+    while (true) {
+        INFO("starting up...");
+        INFO("start result: %d", unicapture_start(&up));
+        sleep(10);
+
+        INFO("stopping...");
+        INFO("stop result: %d", unicapture_stop(&up));
+        sleep(3);
+    }
 
     ui_capture.cleanup(ui_capture.state);
     video_capture.cleanup(video_capture.state);

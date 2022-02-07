@@ -70,7 +70,7 @@ void* unicapture_vsync_handler(void* data) {
     INFO("vsync thread starting...");
 
     while (this->vsync_thread_running) {
-        if (this->video_capture && this->video_capture->wait) {
+        if (this->video_capture_running && this->video_capture->wait) {
             this->video_capture->wait(this->video_capture->state);
         } else {
             DBG("Using fallback wait...");
@@ -88,9 +88,6 @@ int unicapture_run(unicapture_state_t* this) {
     capture_backend_t* ui_capture = this->ui_capture;
     capture_backend_t* video_capture = this->video_capture;
 
-    bool ui_capture_ready = ui_capture != NULL;
-    bool video_capture_ready = video_capture != NULL;
-
     uint64_t framecounter = 0;
     uint64_t framecounter_start = getticks_us();
 
@@ -99,14 +96,6 @@ int unicapture_run(unicapture_state_t* this) {
 
     converter_init(&ui_converter);
     converter_init(&video_converter);
-
-    if (ui_capture_ready) {
-        ui_capture->start(ui_capture->state);
-    }
-
-    if (video_capture_ready) {
-        video_capture->start(video_capture->state);
-    }
 
     pthread_mutex_init(&this->vsync_lock, NULL);
     pthread_cond_init(&this->vsync_cond, NULL);
@@ -117,7 +106,23 @@ int unicapture_run(unicapture_state_t* this) {
     this->vsync_thread_running = true;
     pthread_create(&this->vsync_thread, NULL, unicapture_vsync_handler, this);
 
-    while (true) {
+    while (this->running) {
+        if (ui_capture != NULL && !this->ui_capture_running) {
+            DBG("Attempting UI capture init...");
+            if (ui_capture->start(ui_capture->state) == 0) {
+                INFO("UI capture started");
+                this->ui_capture_running = true;
+            }
+        }
+
+        if (video_capture != NULL && !this->video_capture_running) {
+            DBG("Attempting video capture init...");
+            if (video_capture->start(video_capture->state) == 0) {
+                INFO("Video capture started");
+                this->video_capture_running = true;
+            }
+        }
+
         int ret = 0;
         uint64_t frame_start = getticks_us();
 
@@ -132,13 +137,13 @@ int unicapture_run(unicapture_state_t* this) {
         frame_info_t video_frame_converted = {PIXFMT_INVALID};
 
         // Capture frames
-        if (ui_capture_ready) {
+        if (this->ui_capture_running) {
             if ((ret = ui_capture->acquire_frame(ui_capture->state, &ui_frame)) != 0) {
                 ui_frame.pixel_format = PIXFMT_INVALID;
             }
         }
 
-        if (video_capture_ready) {
+        if (this->video_capture_running) {
             if ((ret = video_capture->acquire_frame(video_capture->state, &video_frame)) != 0) {
                 DBG("video_capture acquire_frame failed: %d", ret);
                 video_frame.pixel_format = PIXFMT_INVALID;
@@ -271,14 +276,16 @@ int unicapture_run(unicapture_state_t* this) {
         pthread_join(this->vsync_thread, NULL);
     }
 
-    if (ui_capture_ready) {
+    if (this->ui_capture_running) {
         DBG("Terminating UI capture...");
         ui_capture->terminate(ui_capture->state);
+        this->ui_capture_running = false;
     }
 
-    if (video_capture_ready) {
+    if (this->video_capture_running) {
         DBG("Terminating Video capture...");
         video_capture->terminate(video_capture->state);
+        this->video_capture_running = false;
     }
 
     if (final_frame != NULL) {
@@ -293,4 +300,31 @@ int unicapture_run(unicapture_state_t* this) {
 
     converter_release(&ui_converter);
     converter_release(&video_converter);
+    DBG("Done!");
+}
+
+void unicapture_init(unicapture_state_t* this) {
+    memset(this, 0, sizeof(unicapture_state_t));
+}
+
+int unicapture_start(unicapture_state_t* this) {
+    if (this->running) {
+        return 1;
+    }
+
+    this->running = true;
+    pthread_create(&this->main_thread, NULL, unicapture_run, this);
+
+    return 0;
+}
+
+int unicapture_stop(unicapture_state_t* this) {
+    if (!this->running) {
+        return 1;
+    }
+
+    this->running = false;
+    pthread_join(this->main_thread, NULL);
+
+    return 0;
 }
