@@ -42,6 +42,7 @@ set_property(TARGET hyperion-webos PROPERTY ENABLE_EXPORTS 1)
 add_executable(unicapture-test
     src/unicapture-test.c
     src/unicapture.c
+    src/converter.c
     src/log.c
 )
 set_target_properties(unicapture-test PROPERTIES
