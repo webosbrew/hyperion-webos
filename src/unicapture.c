@@ -73,7 +73,6 @@ void* unicapture_vsync_handler(void* data) {
         if (this->video_capture_running && this->video_capture->wait) {
             this->video_capture->wait(this->video_capture->state);
         } else {
-            DBG("Using fallback wait...");
             usleep (1000000 / 30);
         }
         pthread_mutex_lock(&this->vsync_lock);
@@ -91,6 +90,9 @@ int unicapture_run(unicapture_state_t* this) {
     uint64_t framecounter = 0;
     uint64_t framecounter_start = getticks_us();
 
+    uint64_t last_video_start = 0;
+    uint64_t last_ui_start = 0;
+
     converter_t ui_converter;
     converter_t video_converter;
 
@@ -107,7 +109,10 @@ int unicapture_run(unicapture_state_t* this) {
     pthread_create(&this->vsync_thread, NULL, unicapture_vsync_handler, this);
 
     while (this->running) {
-        if (ui_capture != NULL && !this->ui_capture_running) {
+        uint64_t now = getticks_us();
+
+        if ((now - last_ui_start) > 1000000 && ui_capture != NULL && !this->ui_capture_running) {
+            last_ui_start = now;
             DBG("Attempting UI capture init...");
             if (ui_capture->start(ui_capture->state) == 0) {
                 INFO("UI capture started");
@@ -115,7 +120,8 @@ int unicapture_run(unicapture_state_t* this) {
             }
         }
 
-        if (video_capture != NULL && !this->video_capture_running) {
+        if ((now - last_video_start) > 1000000 && video_capture != NULL && !this->video_capture_running) {
+            last_video_start = now;
             DBG("Attempting video capture init...");
             if (video_capture->start(video_capture->state) == 0) {
                 INFO("Video capture started");

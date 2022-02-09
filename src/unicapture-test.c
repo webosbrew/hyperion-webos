@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
     while (true) {
         INFO("starting up...");
         INFO("start result: %d", unicapture_start(&up));
-        sleep(10);
+        sleep(60);
 
         INFO("stopping...");
         INFO("stop result: %d", unicapture_stop(&up));
