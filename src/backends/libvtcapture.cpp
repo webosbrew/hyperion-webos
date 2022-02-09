@@ -199,6 +199,7 @@ int capture_release_frame(void* state, frame_info_t* frame)
 int capture_wait(void* state)
 {
     vtcapture_backend_state_t* self = (vtcapture_backend_state_t*) state;
+    uint32_t attempt_count = 0;
 
     // wait until buffer address changed
     while (!self->terminate) {
@@ -211,6 +212,12 @@ int capture_wait(void* state)
         if (self->curr_buff != self->buff.start_addr0)
             break;
 
+        attempt_count += 1;
+        if (attempt_count >= 1000000 / 100) {
+            // Prevent hanging...
+            WARN("captureCurrentBuffInfo() never returned a new plane!");
+            return 1;
+        }
         usleep(100);
     }
 
