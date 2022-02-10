@@ -1,21 +1,21 @@
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 
-#include <sys/mman.h>
-#include <sys/time.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <sys/mman.h>
+#include <sys/time.h>
 
-#include <libyuv.h>
 #include <dile_vt.h>
+#include <libyuv.h>
 
 #include "common.h"
 #include "log.h"
 
-cap_backend_config_t config = {0, 0, 0, 0};
+cap_backend_config_t config = { 0, 0, 0, 0 };
 cap_imagedata_callback_t imagedata_cb = NULL;
 
 pthread_t capture_thread = NULL;
@@ -45,7 +45,7 @@ uint64_t getticks_us()
     return tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
 }
 
-int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback_t callback)
+int capture_preinit(cap_backend_config_t* backend_config, cap_imagedata_callback_t callback)
 {
     INFO("Preinit called. Copying config..");
     memcpy(&config, backend_config, sizeof(cap_backend_config_t));
@@ -54,7 +54,8 @@ int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback
     return 0;
 }
 
-int capture_init() {
+int capture_init()
+{
     INFO("Init called");
     if (getenv("NO_VSYNC_THREAD") != NULL) {
         use_vsync_thread = false;
@@ -63,7 +64,8 @@ int capture_init() {
     return 0;
 }
 
-int capture_terminate() {
+int capture_terminate()
+{
     INFO("Capture termination called");
 
     capture_running = false;
@@ -81,7 +83,8 @@ int capture_terminate() {
     return 0;
 }
 
-int capture_cleanup() {
+int capture_cleanup()
+{
     if (vth != NULL) {
         DILE_VT_Destroy(vth);
     }
@@ -124,7 +127,7 @@ int capture_start()
         return -2;
     }
 
-    DILE_VT_RECT region = {0, 0, config.resolution_width, config.resolution_height};
+    DILE_VT_RECT region = { 0, 0, config.resolution_width, config.resolution_height };
 
     if (region.width < limitation.scaleDownLimitWidth || region.height < limitation.scaleDownLimitHeight) {
         WARN("scaledown is limited to %dx%d while %dx%d has been chosen - there's a chance this will crash!", limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight, region.width, region.height);
@@ -151,7 +154,7 @@ int capture_start()
     uint64_t t2 = getticks_us();
 
     double fps = 1000000.0 / (t2 - t1);
-    INFO("[DILE_VT] frametime: %d; estimated fps before divider: %.5f", (uint32_t) (t2 - t1), fps);
+    INFO("[DILE_VT] frametime: %d; estimated fps before divider: %.5f", (uint32_t)(t2 - t1), fps);
 
     // Set framerate divider
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FRAMERATE_DIVIDE, &output_state) != 0) {
@@ -164,7 +167,7 @@ int capture_start()
     t2 = getticks_us();
 
     fps = 1000000.0 / (t2 - t1);
-    INFO("[DILE_VT] frametime: %d; estimated fps after divider: %.5f", (uint32_t) (t2 - t1), fps);
+    INFO("[DILE_VT] frametime: %d; estimated fps after divider: %.5f", (uint32_t)(t2 - t1), fps);
 
     // Set freeze
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &output_state) != 0) {
@@ -189,7 +192,7 @@ int capture_start()
     }
 
     // TODO: check out if /dev/gfx is something we should rather use
-    mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
+    mem_fd = open("/dev/mem", O_RDWR | O_SYNC);
     if (mem_fd == -1) {
         return -6;
     }
@@ -200,7 +203,7 @@ int capture_start()
         vfbs[vfb] = calloc(vfbcap.numPlanes, sizeof(uint8_t*));
         for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
             DBG("[DILE_VT] vfb[%d][%d] = 0x%08x", vfb, plane, vfbprop.ptr[vfb][plane]);
-            vfbs[vfb][plane] = (uint8_t*) mmap(0, vfbprop.stride * vfbprop.height, PROT_READ, MAP_SHARED, mem_fd, vfbprop.ptr[vfb][plane]);
+            vfbs[vfb][plane] = (uint8_t*)mmap(0, vfbprop.stride * vfbprop.height, PROT_READ, MAP_SHARED, mem_fd, vfbprop.ptr[vfb][plane]);
         }
     }
 
@@ -210,12 +213,12 @@ int capture_start()
 
     capture_running = true;
 
-    if (pthread_create (&capture_thread, NULL, capture_thread_target, NULL) != 0) {
+    if (pthread_create(&capture_thread, NULL, capture_thread_target, NULL) != 0) {
         return -7;
     }
 
     if (use_vsync_thread) {
-        if (pthread_create (&vsync_thread, NULL, vsync_thread_target, NULL) != 0) {
+        if (pthread_create(&vsync_thread, NULL, vsync_thread_target, NULL) != 0) {
             return -8;
         }
     }
@@ -227,7 +230,8 @@ uint64_t framecount = 0;
 uint64_t start_time = 0;
 uint32_t idx = 0;
 
-void dump_buffer(uint8_t* buf, uint64_t size, uint32_t idx, uint32_t plane) {
+void dump_buffer(uint8_t* buf, uint64_t size, uint32_t idx, uint32_t plane)
+{
     char filename[256];
     snprintf(filename, sizeof(filename), "/tmp/hyperion-webos-dump.%03d.%03d.raw", idx, plane);
     FILE* fd = fopen(filename, "wb");
@@ -236,7 +240,8 @@ void dump_buffer(uint8_t* buf, uint64_t size, uint32_t idx, uint32_t plane) {
     INFO("Buffer dumped to: %s", filename);
 }
 
-void capture_frame() {
+void capture_frame()
+{
     uint64_t t1, t6, t7;
     uint32_t width = vfbprop.width;
     uint32_t height = vfbprop.height;
@@ -275,12 +280,12 @@ void capture_frame() {
     } else if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_YUV420_SEMI_PLANAR) {
         if (outbuf == NULL)
             // Temporary conversion buffer
-            outbuf = malloc (width * height * 3);
+            outbuf = malloc(width * height * 3);
 
         NV21ToRGB24(vfbs[idx][0], vfbprop.stride, vfbs[idx][1], vfbprop.stride, outbuf, width * 3, width, height);
     } else if (vfbprop.pixelFormat == DILE_VT_VIDEO_FRAME_BUFFER_PIXEL_FORMAT_YUV422_SEMI_PLANAR) {
         if (outbuf == NULL)
-            outbuf = malloc (3 * width * height);
+            outbuf = malloc(3 * width * height);
         if (argbvideo == NULL)
             argbvideo = malloc(4 * width * height);
         if (uplane == NULL)
@@ -296,8 +301,8 @@ void capture_frame() {
         // thing. This is not much of a problem, since will be used later when
         // UI layer blending will be introduced.
 
-        SplitUVPlane(vfbs[idx][1], vfbprop.stride, vplane, width/2, uplane, width/2, width/2, height);
-        I422ToARGB(vfbs[idx][0], vfbprop.stride, uplane, width/2, vplane, width/2, argbvideo, 4 * width, width, height);
+        SplitUVPlane(vfbs[idx][1], vfbprop.stride, vplane, width / 2, uplane, width / 2, width / 2, height);
+        I422ToARGB(vfbs[idx][0], vfbprop.stride, uplane, width / 2, vplane, width / 2, argbvideo, 4 * width, width, height);
         ARGBToRGB24(argbvideo, 4 * width, outbuf, 3 * width, width, height);
     } else {
         ERR("[DILE_VT] Unsupported pixel format: %d", vfbprop.pixelFormat);
@@ -320,14 +325,16 @@ void capture_frame() {
     DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &output_state);
 }
 
-void* capture_thread_target(void* data) {
+void* capture_thread_target(void* data)
+{
     INFO("capture_thread_target called.");
     while (capture_running) {
         capture_frame();
     }
 }
 
-void* vsync_thread_target(void* data) {
+void* vsync_thread_target(void* data)
+{
     INFO("vsync_thread_target called.");
     while (capture_running) {
         DILE_VT_WaitVsync(vth, 0, 0);

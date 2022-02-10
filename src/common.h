@@ -1,13 +1,12 @@
 #pragma once
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /*
  * Callback for submitting new image data to hyperion
  * To be called from capture backend implementation
  */
 typedef int (*cap_imagedata_callback_t)(int width, int height, uint8_t* rgb_data);
-
 
 /*
  * Common configuration for all backends
@@ -27,14 +26,14 @@ typedef struct _cap_backend_config {
 } cap_backend_config_t;
 
 #if defined(CAPTURE_BACKEND)
-    /*
-     * Ensuring capture backends implement needed functionality
-     */
-    extern int capture_preinit(cap_backend_config_t*, cap_imagedata_callback_t);
-    extern int capture_init();
-    extern int capture_start();
-    extern int capture_terminate();
-    extern int capture_cleanup();
+/*
+ * Ensuring capture backends implement needed functionality
+ */
+extern int capture_preinit(cap_backend_config_t*, cap_imagedata_callback_t);
+extern int capture_init();
+extern int capture_start();
+extern int capture_terminate();
+extern int capture_cleanup();
 #endif
 
 /*

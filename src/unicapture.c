@@ -1,26 +1,28 @@
-#include <stdbool.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <time.h>
-#include <dlfcn.h>
-#include <libyuv.h>
 #include "unicapture.h"
 #include "converter.h"
 #include "log.h"
+#include <dlfcn.h>
+#include <libyuv.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
 
-#define DLSYM_ERROR_CHECK()                                         \
-    if ((error = dlerror()) != NULL)  {                             \
-        ERR("Error! dlsym failed, msg: %s", error);                 \
-        return -2;                                                  \
+#define DLSYM_ERROR_CHECK()                         \
+    if ((error = dlerror()) != NULL) {              \
+        ERR("Error! dlsym failed, msg: %s", error); \
+        return -2;                                  \
     }
 
-static uint64_t getticks_us() {
+static uint64_t getticks_us()
+{
     struct timespec tp;
     clock_gettime(CLOCK_MONOTONIC, &tp);
     return tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
 }
 
-int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* backend, char* name) {
+int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* backend, char* name)
+{
     char* error;
     void* handle = dlopen(name, RTLD_LAZY);
 
@@ -33,16 +35,23 @@ int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* bac
 
     dlerror();
 
-    backend->init = dlsym(handle, "capture_init"); DLSYM_ERROR_CHECK();
-    backend->cleanup = dlsym(handle, "capture_cleanup"); DLSYM_ERROR_CHECK();
+    backend->init = dlsym(handle, "capture_init");
+    DLSYM_ERROR_CHECK();
+    backend->cleanup = dlsym(handle, "capture_cleanup");
+    DLSYM_ERROR_CHECK();
 
-    backend->start = dlsym(handle, "capture_start"); DLSYM_ERROR_CHECK();
-    backend->terminate = dlsym(handle, "capture_terminate"); DLSYM_ERROR_CHECK();
+    backend->start = dlsym(handle, "capture_start");
+    DLSYM_ERROR_CHECK();
+    backend->terminate = dlsym(handle, "capture_terminate");
+    DLSYM_ERROR_CHECK();
 
-    backend->acquire_frame = dlsym(handle, "capture_acquire_frame"); DLSYM_ERROR_CHECK();
-    backend->release_frame = dlsym(handle, "capture_release_frame"); DLSYM_ERROR_CHECK();
+    backend->acquire_frame = dlsym(handle, "capture_acquire_frame");
+    DLSYM_ERROR_CHECK();
+    backend->release_frame = dlsym(handle, "capture_release_frame");
+    DLSYM_ERROR_CHECK();
 
-    backend->wait = dlsym(handle, "capture_wait"); DLSYM_ERROR_CHECK();
+    backend->wait = dlsym(handle, "capture_wait");
+    DLSYM_ERROR_CHECK();
 
     DBG("%s: loaded, initializing...", name);
 
@@ -56,16 +65,19 @@ int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* bac
     return ret;
 }
 
-int unicapture_try_backends(cap_backend_config_t* config, capture_backend_t* backend, char** candidates) {
+int unicapture_try_backends(cap_backend_config_t* config, capture_backend_t* backend, char** candidates)
+{
     for (int i = 0; candidates[i] != NULL; i++) {
-        if (unicapture_init_backend(config, backend, candidates[i]) == 0) return 0;
+        if (unicapture_init_backend(config, backend, candidates[i]) == 0)
+            return 0;
     }
 
     return -1;
 }
 
-void* unicapture_vsync_handler(void* data) {
-    unicapture_state_t* this = (unicapture_state_t*) data;
+void* unicapture_vsync_handler(void* data)
+{
+    unicapture_state_t* this = (unicapture_state_t*)data;
 
     INFO("vsync thread starting...");
 
@@ -73,7 +85,7 @@ void* unicapture_vsync_handler(void* data) {
         if (this->video_capture_running && this->video_capture->wait) {
             this->video_capture->wait(this->video_capture->state);
         } else {
-            usleep (1000000 / 30);
+            usleep(1000000 / 30);
         }
         pthread_mutex_lock(&this->vsync_lock);
         pthread_cond_signal(&this->vsync_cond);
@@ -83,7 +95,8 @@ void* unicapture_vsync_handler(void* data) {
     INFO("vsync thread finished");
 }
 
-int unicapture_run(unicapture_state_t* this) {
+int unicapture_run(unicapture_state_t* this)
+{
     capture_backend_t* ui_capture = this->ui_capture;
     capture_backend_t* video_capture = this->video_capture;
 
@@ -137,10 +150,10 @@ int unicapture_run(unicapture_state_t* this) {
         pthread_mutex_unlock(&this->vsync_lock);
         uint64_t frame_wait = getticks_us();
 
-        frame_info_t ui_frame = {PIXFMT_INVALID};
-        frame_info_t ui_frame_converted = {PIXFMT_INVALID};
-        frame_info_t video_frame = {PIXFMT_INVALID};
-        frame_info_t video_frame_converted = {PIXFMT_INVALID};
+        frame_info_t ui_frame = { PIXFMT_INVALID };
+        frame_info_t ui_frame_converted = { PIXFMT_INVALID };
+        frame_info_t video_frame = { PIXFMT_INVALID };
+        frame_info_t video_frame_converted = { PIXFMT_INVALID };
 
         // Capture frames
         if (this->ui_capture_running) {
@@ -190,16 +203,14 @@ int unicapture_run(unicapture_state_t* this) {
                 blended_frame,
                 4 * width,
                 width,
-                height
-            );
+                height);
             ARGBToRGB24(
                 blended_frame,
                 4 * width,
                 final_frame,
                 3 * width,
                 width,
-                height
-            );
+                height);
         } else if (ui_frame_converted.pixel_format != PIXFMT_INVALID) {
             width = ui_frame_converted.width;
             height = ui_frame_converted.height;
@@ -212,8 +223,7 @@ int unicapture_run(unicapture_state_t* this) {
                 final_frame,
                 3 * width,
                 width,
-                height
-            );
+                height);
         } else if (video_frame_converted.pixel_format != PIXFMT_INVALID) {
             width = video_frame_converted.width;
             height = video_frame_converted.height;
@@ -226,8 +236,7 @@ int unicapture_run(unicapture_state_t* this) {
                 final_frame,
                 3 * width,
                 width,
-                height
-            );
+                height);
         } else {
             got_frame = false;
             WARN("No valid frame to send...");
@@ -237,7 +246,7 @@ int unicapture_run(unicapture_state_t* this) {
 
         if (got_frame && framecounter % 30 == 0) {
             char filename[256];
-            snprintf(filename, sizeof(filename), "/tmp/hyperion-webos-dump.%03d.data", (int) (framecounter / 30) % 10);
+            snprintf(filename, sizeof(filename), "/tmp/hyperion-webos-dump.%03d.data", (int)(framecounter / 30) % 10);
             FILE* fd = fopen(filename, "wb");
             fwrite(final_frame, 3 * width * height, 1, fd);
             fclose(fd);
@@ -262,7 +271,7 @@ int unicapture_run(unicapture_state_t* this) {
             if (framecounter % 60 == 0) {
                 double fps = (60 * 1000000.0) / (getticks_us() - framecounter_start);
                 INFO("Framerate: %.6f FPS; timings - wait: %lldus, acquire: %lldus, convert: %lldus, process; %lldus, send: %lldus, release: %lldus",
-                        fps, frame_wait - frame_start, frame_acquired - frame_wait, frame_converted - frame_acquired, frame_processed - frame_converted, frame_sent - frame_processed, frame_released - frame_sent);
+                    fps, frame_wait - frame_start, frame_acquired - frame_wait, frame_converted - frame_acquired, frame_processed - frame_converted, frame_sent - frame_processed, frame_released - frame_sent);
 
                 INFO("        UI: pixfmt: %d; %dx%d", ui_frame.pixel_format, ui_frame.width, ui_frame.height);
                 INFO("     VIDEO: pixfmt: %d; %dx%d", video_frame.pixel_format, video_frame.width, video_frame.height);
@@ -309,11 +318,13 @@ int unicapture_run(unicapture_state_t* this) {
     DBG("Done!");
 }
 
-void unicapture_init(unicapture_state_t* this) {
+void unicapture_init(unicapture_state_t* this)
+{
     memset(this, 0, sizeof(unicapture_state_t));
 }
 
-int unicapture_start(unicapture_state_t* this) {
+int unicapture_start(unicapture_state_t* this)
+{
     if (this->running) {
         return 1;
     }
@@ -324,7 +335,8 @@ int unicapture_start(unicapture_state_t* this) {
     return 0;
 }
 
-int unicapture_stop(unicapture_state_t* this) {
+int unicapture_stop(unicapture_state_t* this)
+{
     if (!this->running) {
         return 1;
     }

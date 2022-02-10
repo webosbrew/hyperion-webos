@@ -1,7 +1,7 @@
 #include "log.h"
+#include <PmLogLib.h>
 #include <stdint.h>
 #include <time.h>
-#include <PmLogLib.h>
 
 uint64_t start = 0;
 PmLogContext context;
@@ -14,17 +14,20 @@ uint64_t getticks_us()
     return tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
 }
 
-void log_init() {
+void log_init()
+{
     PmLogGetContext("hyperion-webos", &context);
 }
 
-void log_set_level(LogLevel level) {
+void log_set_level(LogLevel level)
+{
     current_log_level = level;
 }
 
-void log_printf(LogLevel level, const char* module, const char* fmt, ...) {
+void log_printf(LogLevel level, const char* module, const char* fmt, ...)
+{
     va_list args;
-    va_start (args, fmt);
+    va_start(args, fmt);
     const char* level_str;
     const char* color_str;
 
@@ -59,8 +62,8 @@ void log_printf(LogLevel level, const char* module, const char* fmt, ...) {
     _PmLogMsgKV(context, level, 0, level == Debug ? NULL : level_str, 0, NULL, NULL, formatted);
 
     if (level <= current_log_level) {
-        fprintf(stderr, "%10.3fs %s[%4s %-20s]\x1b[0m %s\n", (getticks_us() - start)/1000000.0, color_str, level_str, module, formatted + prefix);
+        fprintf(stderr, "%10.3fs %s[%4s %-20s]\x1b[0m %s\n", (getticks_us() - start) / 1000000.0, color_str, level_str, module, formatted + prefix);
     }
 
-    va_end (args);
+    va_end(args);
 }

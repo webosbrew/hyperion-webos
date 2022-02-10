@@ -1,22 +1,20 @@
+#include <fcntl.h> // open()
 #include <halgal.h>
 #include <stdlib.h> // calloc()
-#include <fcntl.h> // open()
-#include <unistd.h> // close()
 #include <sys/mman.h> // munmap()
+#include <unistd.h> // close()
 
-#include "unicapture.h"
 #include "log.h"
-
+#include "unicapture.h"
 
 typedef struct _halgal_backend_state {
     int width;
     int height;
     HAL_GAL_SURFACE surface_info;
     size_t num_bytes;
-    char *mem_addr;
+    char* mem_addr;
     int mem_fd;
 } halgal_backend_state_t;
-
 
 int capture_init(cap_backend_config_t* config, void** state_p)
 {
@@ -30,29 +28,33 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     if ((ret = HAL_GAL_Init()) != 0) {
 
         ERR("HAL_GAL_Init failed: %x", ret);
-        ret = -1; goto err_destroy;
+        ret = -1;
+        goto err_destroy;
     }
-    INFO("HAL_GAL_Init done! Exit: %d", ret);   
+    INFO("HAL_GAL_Init done! Exit: %d", ret);
 
     if ((ret = HAL_GAL_CreateSurface(this->width, this->height, 0, &this->surface_info)) != 0) {
 
         ERR("HAL_GAL_CreateSurface failed: %x", ret);
-        ret = -2; goto err_destroy;
+        ret = -2;
+        goto err_destroy;
     }
     INFO("HAL_GAL_CreateSurface done! SurfaceID: %d", this->surface_info.vendorData);
 
     if ((ret = HAL_GAL_CaptureFrameBuffer(&this->surface_info)) != 0) {
 
         ERR("HAL_GAL_CaptureFrameBuffer failed: %x", ret);
-        ret = -3; goto err_destroy;
+        ret = -3;
+        goto err_destroy;
     }
     INFO("HAL_GAL_CaptureFrameBuffer done! %x", ret);
 
-     // ToDo: compare open("/dev/mem", O_RDWR|O_SYNC);
+    // ToDo: compare open("/dev/mem", O_RDWR|O_SYNC);
     if ((this->mem_fd = open("/dev/gfx", 2)) < 0) {
 
         ERR("HAL_GAL: gfx open fail result: %d", this->mem_fd);
-        ret = -4; goto err_destroy;
+        ret = -4;
+        goto err_destroy;
     }
     INFO("HAL_GAL: gfx open ok result: %d", this->mem_fd);
 
@@ -60,11 +62,12 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     if (this->num_bytes == 0)
         this->num_bytes = this->surface_info.property * this->surface_info.height;
 
-     // ToDo: compare mmap(0, this->vfbprop.stride * this->vfbprop.height, PROT_READ, MAP_SHARED, this->mem_fd, this->vfbprop.ptr[vfb][plane]);
-    if ((this->mem_addr = (char *) mmap(0, this->num_bytes, 3, 1, this->mem_fd, this->surface_info.offset)) == MAP_FAILED) {
+    // ToDo: compare mmap(0, this->vfbprop.stride * this->vfbprop.height, PROT_READ, MAP_SHARED, this->mem_fd, this->vfbprop.ptr[vfb][plane]);
+    if ((this->mem_addr = (char*)mmap(0, this->num_bytes, 3, 1, this->mem_fd, this->surface_info.offset)) == MAP_FAILED) {
 
         ERR("HAL_GAL: mmap() failed");
-        ret = -5; goto err_mmap;
+        ret = -5;
+        goto err_mmap;
     }
     INFO("HAL_GAL: mmap() success");
     // ToDo: Should be OK to close this->mem_fd right here
@@ -87,7 +90,7 @@ err_destroy:
 
 int capture_cleanup(void* state)
 {
-    halgal_backend_state_t* this = (halgal_backend_state_t*) state;
+    halgal_backend_state_t* this = (halgal_backend_state_t*)state;
 
     HAL_GAL_DestroySurface(&this->surface_info);
     munmap(this->mem_addr, this->num_bytes);
@@ -98,7 +101,7 @@ int capture_cleanup(void* state)
 }
 
 int capture_start(void* state)
-{ 
+{
     return 0;
 }
 
@@ -109,7 +112,7 @@ int capture_terminate(void* state)
 
 int capture_acquire_frame(void* state, frame_info_t* frame)
 {
-    halgal_backend_state_t* this = (halgal_backend_state_t*) state;
+    halgal_backend_state_t* this = (halgal_backend_state_t*)state;
     int ret = 0;
 
     if ((ret = HAL_GAL_CaptureFrameBuffer(&this->surface_info)) != 0) {

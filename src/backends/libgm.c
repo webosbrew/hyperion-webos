@@ -9,7 +9,8 @@ typedef struct _gm_backend_state {
     GM_SURFACE surface_info;
 } gm_backend_state_t;
 
-int capture_init(cap_backend_config_t* config, void** state_p) {
+int capture_init(cap_backend_config_t* config, void** state_p)
+{
     int ret = 0;
 
     gm_backend_state_t* state = calloc(1, sizeof(gm_backend_state_t));
@@ -26,18 +27,20 @@ int capture_init(cap_backend_config_t* config, void** state_p) {
     return 0;
 }
 
-int capture_cleanup(void* state) {
-    gm_backend_state_t* this = (gm_backend_state_t*) state;
+int capture_cleanup(void* state)
+{
+    gm_backend_state_t* this = (gm_backend_state_t*)state;
     GM_DestroySurface(this->surface_info.surfaceID);
     free(state);
     return 0;
 }
 
 int capture_start(void* state) { return 0; }
-int capture_terminate(void* state) { return 0;}
+int capture_terminate(void* state) { return 0; }
 
-int capture_acquire_frame(void* state, frame_info_t* frame) {
-    gm_backend_state_t* this = (gm_backend_state_t*) state;
+int capture_acquire_frame(void* state, frame_info_t* frame)
+{
+    gm_backend_state_t* this = (gm_backend_state_t*)state;
     int ret = 0;
     int width = this->width;
     int height = this->height;
@@ -55,10 +58,12 @@ int capture_acquire_frame(void* state, frame_info_t* frame) {
     return 0;
 }
 
-int capture_release_frame(void* state, frame_info_t* frame) {
+int capture_release_frame(void* state, frame_info_t* frame)
+{
     return 0;
 }
 
-int capture_wait(void* state) {
+int capture_wait(void* state)
+{
     return 0;
 }

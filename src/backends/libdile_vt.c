@@ -1,18 +1,18 @@
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 
-#include <sys/mman.h>
-#include <sys/time.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <sys/mman.h>
+#include <sys/time.h>
 
 #include <dile_vt.h>
 
-#include "unicapture.h"
 #include "log.h"
+#include "unicapture.h"
 
 typedef struct _dile_vt_backend_state {
     DILE_VT_HANDLE vth;
@@ -23,7 +23,8 @@ typedef struct _dile_vt_backend_state {
     int mem_fd;
 } dile_vt_backend_state_t;
 
-int capture_init(cap_backend_config_t* config, void** state_p) {
+int capture_init(cap_backend_config_t* config, void** state_p)
+{
     int ret = 0;
     DILE_VT_HANDLE vth;
 
@@ -53,7 +54,8 @@ int capture_init(cap_backend_config_t* config, void** state_p) {
 
     DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_LIMITATION limitation;
     if (DILE_VT_GetVideoFrameOutputDeviceLimitation(vth, &limitation) != 0) {
-        ret = -11; goto err_destroy;
+        ret = -11;
+        goto err_destroy;
     }
 
     DBG("supportScaleUp: %d; (%dx%d)", limitation.supportScaleUp, limitation.scaleUpLimitWidth, limitation.scaleUpLimitHeight);
@@ -62,17 +64,19 @@ int capture_init(cap_backend_config_t* config, void** state_p) {
     DBG("input deinterlace: %d; display deinterlace: %d", limitation.supportInputVideoDeInterlacing, limitation.supportDisplayVideoDeInterlacing);
 
     if (DILE_VT_SetVideoFrameOutputDeviceDumpLocation(vth, DILE_VT_DISPLAY_OUTPUT) != 0) {
-        ret = -2; goto err_destroy;
+        ret = -2;
+        goto err_destroy;
     }
 
-    DILE_VT_RECT region = {0, 0, config->resolution_width, config->resolution_height};
+    DILE_VT_RECT region = { 0, 0, config->resolution_width, config->resolution_height };
 
     if (region.width < limitation.scaleDownLimitWidth || region.height < limitation.scaleDownLimitHeight) {
         WARN("scaledown is limited to %dx%d while %dx%d has been chosen - there's a chance this will crash!", limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight, region.width, region.height);
     }
 
     if (DILE_VT_SetVideoFrameOutputDeviceOutputRegion(vth, DILE_VT_DISPLAY_OUTPUT, &region) != 0) {
-        ret = -2; goto err_destroy;
+        ret = -2;
+        goto err_destroy;
     }
 
     this->output_state.enabled = 0;
@@ -92,11 +96,12 @@ int capture_init(cap_backend_config_t* config, void** state_p) {
     uint64_t t2 = getticks_us();
 
     double fps = 1000000.0 / (t2 - t1);
-    INFO("[DILE_VT] frametime: %d; estimated fps before divider: %.5f", (uint32_t) (t2 - t1), fps);
+    INFO("[DILE_VT] frametime: %d; estimated fps before divider: %.5f", (uint32_t)(t2 - t1), fps);
 
     // Set framerate divider
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FRAMERATE_DIVIDE, &this->output_state) != 0) {
-        ret = -4; goto err_destroy;
+        ret = -4;
+        goto err_destroy;
     }
 
     DILE_VT_WaitVsync(vth, 0, 0);
@@ -105,16 +110,18 @@ int capture_init(cap_backend_config_t* config, void** state_p) {
     t2 = getticks_us();
 
     fps = 1000000.0 / (t2 - t1);
-    INFO("[DILE_VT] frametime: %d; estimated fps after divider: %.5f", (uint32_t) (t2 - t1), fps);
+    INFO("[DILE_VT] frametime: %d; estimated fps after divider: %.5f", (uint32_t)(t2 - t1), fps);
 
     // Set freeze
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &this->output_state) != 0) {
-        ret = -5; goto err_destroy;
+        ret = -5;
+        goto err_destroy;
     }
 
     // Prepare offsets table (needs to be ptr[vfbcap.numVfs][vbcap.numPlanes])
     if (DILE_VT_GetVideoFrameBufferCapability(vth, &this->vfbcap) != 0) {
-        ret = -9; goto err_destroy;
+        ret = -9;
+        goto err_destroy;
     }
 
     INFO("[DILE_VT] vfbs: %d; planes: %d", this->vfbcap.numVfbs, this->vfbcap.numPlanes);
@@ -126,13 +133,15 @@ int capture_init(cap_backend_config_t* config, void** state_p) {
     this->vfbprop.ptr = ptr;
 
     if (DILE_VT_GetAllVideoFrameBufferProperty(vth, &this->vfbcap, &this->vfbprop) != 0) {
-        ret = -10; goto err_destroy;
+        ret = -10;
+        goto err_destroy;
     }
 
     // TODO: check out if /dev/gfx is something we should rather use
-    this->mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
+    this->mem_fd = open("/dev/mem", O_RDWR | O_SYNC);
     if (this->mem_fd == -1) {
-        ret = -6; goto err_destroy;
+        ret = -6;
+        goto err_destroy;
     }
 
     INFO("[DILE_VT] pixelFormat: %d; width: %d; height: %d; stride: %d...", this->vfbprop.pixelFormat, this->vfbprop.width, this->vfbprop.height, this->vfbprop.stride);
@@ -141,7 +150,7 @@ int capture_init(cap_backend_config_t* config, void** state_p) {
         this->vfbs[vfb] = calloc(this->vfbcap.numPlanes, sizeof(uint8_t*));
         for (int plane = 0; plane < this->vfbcap.numPlanes; plane++) {
             DBG("[DILE_VT] vfb[%d][%d] = 0x%08x", vfb, plane, this->vfbprop.ptr[vfb][plane]);
-            this->vfbs[vfb][plane] = (uint8_t*) mmap(0, this->vfbprop.stride * this->vfbprop.height, PROT_READ, MAP_SHARED, this->mem_fd, this->vfbprop.ptr[vfb][plane]);
+            this->vfbs[vfb][plane] = (uint8_t*)mmap(0, this->vfbprop.stride * this->vfbprop.height, PROT_READ, MAP_SHARED, this->mem_fd, this->vfbprop.ptr[vfb][plane]);
         }
     }
 
@@ -157,8 +166,9 @@ err_destroy:
     return ret;
 }
 
-int capture_cleanup(void* state) {
-    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*) state;
+int capture_cleanup(void* state)
+{
+    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
     DILE_VT_Destroy(this->vth);
     free(this);
     return 0;
@@ -166,21 +176,23 @@ int capture_cleanup(void* state) {
 
 int capture_start(void* state)
 {
-    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*) state;
+    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
     if (DILE_VT_Start(this->vth) != 0) {
         return -1;
     }
     return 0;
 }
 
-int capture_terminate(void* state) {
-    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*) state;
+int capture_terminate(void* state)
+{
+    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
     DILE_VT_Stop(this->vth);
     return 0;
 }
 
-int capture_acquire_frame(void* state, frame_info_t* frame) {
-    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*) state;
+int capture_acquire_frame(void* state, frame_info_t* frame)
+{
+    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
 
     uint32_t idx = 0;
 
@@ -217,15 +229,17 @@ int capture_acquire_frame(void* state, frame_info_t* frame) {
     return 0;
 }
 
-int capture_release_frame(void* state, frame_info_t* frame) {
-    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*) state;
+int capture_release_frame(void* state, frame_info_t* frame)
+{
+    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
     this->output_state.freezed = 0;
     DILE_VT_SetVideoFrameOutputDeviceState(this->vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &this->output_state);
     return 0;
 }
 
-int capture_wait(void* state) {
-    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*) state;
+int capture_wait(void* state)
+{
+    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
     DILE_VT_WaitVsync(this->vth, 0, 0);
     return 0;
 }

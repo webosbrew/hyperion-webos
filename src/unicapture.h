@@ -1,7 +1,7 @@
 #pragma once
-#include <stdint.h>
-#include <pthread.h>
 #include "common.h"
+#include <pthread.h>
+#include <stdint.h>
 
 typedef enum _pixel_format {
     PIXFMT_INVALID = 0,

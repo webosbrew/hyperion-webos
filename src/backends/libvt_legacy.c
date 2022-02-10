@@ -1,21 +1,20 @@
 #include <assert.h>
+#include <getopt.h>
+#include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
-#include <string.h>
-#include <getopt.h>
 #include <time.h>
-#include <signal.h>
 
 #include <pthread.h>
 
-#include <GLES2/gl2.h>
 #include <EGL/egl.h>
+#include <GLES2/gl2.h>
 #include <vt/vt_openapi.h>
 
-#include "gl_debug.h"
 #include "common.h"
+#include "gl_debug.h"
 #include "log.h"
 
 EGLDisplay egl_display;
@@ -34,11 +33,11 @@ GLubyte *pixels_rgba = NULL, *pixels_rgb = NULL;
 bool capture_initialized = false;
 bool vt_available = false;
 
-cap_backend_config_t config = {0, 0, 0, 0};
+cap_backend_config_t config = { 0, 0, 0, 0 };
 cap_imagedata_callback_t imagedata_cb = NULL;
-VT_RESOLUTION_T resolution = {192, 108};
+VT_RESOLUTION_T resolution = { 192, 108 };
 
-void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data);
+void capture_onevent(VT_EVENT_TYPE_T type, void* data, void* user_data);
 void read_picture();
 
 void egl_init()
@@ -64,7 +63,8 @@ void egl_init()
         EGL_GREEN_SIZE, 8,
         EGL_RED_SIZE, 8,
         EGL_ALPHA_SIZE, 8,
-        EGL_NONE};
+        EGL_NONE
+    };
 
     eglChooseConfig(egl_display, configAttribs, &eglCfg, 1, &numConfigs);
     assert(eglGetError() == EGL_SUCCESS);
@@ -77,7 +77,8 @@ void egl_init()
         EGL_TEXTURE_FORMAT, EGL_TEXTURE_RGBA,
         EGL_TEXTURE_TARGET, EGL_TEXTURE_2D,
         EGL_LARGEST_PBUFFER, EGL_TRUE,
-        EGL_NONE};
+        EGL_NONE
+    };
     egl_surface = eglCreatePbufferSurface(egl_display, eglCfg, pbufferAttribs);
     assert(eglGetError() == EGL_SUCCESS);
     assert(egl_surface);
@@ -90,7 +91,8 @@ void egl_init()
 
     EGLint contextAttribs[] = {
         EGL_CONTEXT_CLIENT_VERSION, 2,
-        EGL_NONE};
+        EGL_NONE
+    };
     egl_context = eglCreateContext(egl_display, eglCfg, EGL_NO_CONTEXT, contextAttribs);
     assert(eglGetError() == EGL_SUCCESS);
     assert(egl_context);
@@ -121,7 +123,7 @@ void egl_cleanup()
     free(pixels_rgba);
 }
 
-int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback_t callback)
+int capture_preinit(cap_backend_config_t* backend_config, cap_imagedata_callback_t callback)
 {
     INFO("Preinit called. Copying config..");
     memcpy(&config, backend_config, sizeof(cap_backend_config_t));
@@ -137,24 +139,21 @@ int capture_preinit(cap_backend_config_t *backend_config, cap_imagedata_callback
 int capture_init()
 {
     int32_t supported = 0;
-    if (VT_IsSystemSupported(&supported) != VT_OK || !supported)
-    {
+    if (VT_IsSystemSupported(&supported) != VT_OK || !supported) {
         ERR("[VT] VT_IsSystemSupported Failed. This TV doesn't support VT.");
         return -1;
     }
 
     INFO("[VT] VT_CreateVideoWindow");
     VT_VIDEO_WINDOW_ID window_id = VT_CreateVideoWindow(0);
-    if (window_id == -1)
-    {
+    if (window_id == -1) {
         ERR("[VT] VT_CreateVideoWindow Failed");
         return -1;
     }
     INFO("[VT] window_id=%d", window_id);
 
     INFO("[VT] VT_AcquireVideoWindowResource");
-    if (VT_AcquireVideoWindowResource(window_id, &resource_id) != VT_OK)
-    {
+    if (VT_AcquireVideoWindowResource(window_id, &resource_id) != VT_OK) {
         ERR("[VT] VT_AcquireVideoWindowResource Failed");
         return -1;
     }
@@ -162,8 +161,7 @@ int capture_init()
 
     INFO("[VT] VT_CreateContext");
     context_id = VT_CreateContext(resource_id, 2);
-    if (!context_id || context_id == -1)
-    {
+    if (!context_id || context_id == -1) {
         ERR("[VT] VT_CreateContext Failed");
         VT_ReleaseVideoWindowResource(resource_id);
         return -1;
@@ -175,8 +173,7 @@ int capture_init()
     // VT_GetTextureResolution(context_id, &resolution);
 
     INFO("[VT] VT_SetTextureSourceRegion");
-    if (VT_SetTextureSourceRegion(context_id, VT_SOURCE_REGION_MAX) != VT_OK)
-    {
+    if (VT_SetTextureSourceRegion(context_id, VT_SOURCE_REGION_MAX) != VT_OK) {
         ERR("[VT] VT_SetTextureSourceRegion Failed");
         VT_DeleteContext(context_id);
         VT_ReleaseVideoWindowResource(resource_id);
@@ -184,8 +181,7 @@ int capture_init()
     }
 
     INFO("[VT] VT_SetTextureSourceLocation");
-    if (VT_SetTextureSourceLocation(context_id, VT_SOURCE_LOCATION_DISPLAY) != VT_OK)
-    {
+    if (VT_SetTextureSourceLocation(context_id, VT_SOURCE_LOCATION_DISPLAY) != VT_OK) {
         ERR("[VT] VT_SetTextureSourceLocation Failed");
         VT_DeleteContext(context_id);
         VT_ReleaseVideoWindowResource(resource_id);
@@ -193,8 +189,7 @@ int capture_init()
     }
 
     INFO("[VT] VT_RegisterEventHandler");
-    if (VT_RegisterEventHandler(context_id, &capture_onevent, NULL) != VT_OK)
-    {
+    if (VT_RegisterEventHandler(context_id, &capture_onevent, NULL) != VT_OK) {
         ERR("[VT] VT_RegisterEventHandler Failed");
         VT_DeleteContext(context_id);
         VT_ReleaseVideoWindowResource(resource_id);
@@ -202,13 +197,14 @@ int capture_init()
     }
     capture_initialized = true;
 
-    pixels_rgba = (GLubyte *)calloc(resolution.w * resolution.h, 4 * sizeof(GLubyte));
-    pixels_rgb = (GLubyte *)calloc(resolution.w * resolution.h, 3 * sizeof(GLubyte)); 
+    pixels_rgba = (GLubyte*)calloc(resolution.w * resolution.h, 4 * sizeof(GLubyte));
+    pixels_rgb = (GLubyte*)calloc(resolution.w * resolution.h, 3 * sizeof(GLubyte));
 
     return 0;
 }
 
-int capture_start(){
+int capture_start()
+{
     return 0;
 }
 
@@ -219,14 +215,12 @@ int capture_terminate()
 
     capture_initialized = false;
 
-    if (texture_id != 0 && glIsTexture(texture_id))
-    {
+    if (texture_id != 0 && glIsTexture(texture_id)) {
         VT_DeleteTexture(context_id, texture_id);
     }
 
     INFO("[VT] VT_UnRegisterEventHandler");
-    if (VT_UnRegisterEventHandler(context_id) != VT_OK)
-    {
+    if (VT_UnRegisterEventHandler(context_id) != VT_OK) {
         ERR("[VT] VT_UnRegisterEventHandler error!");
     }
     INFO("[VT] VT_DeleteContext");
@@ -236,7 +230,8 @@ int capture_terminate()
     return 0;
 }
 
-int capture_cleanup(){
+int capture_cleanup()
+{
     egl_cleanup();
     return 0;
 }
@@ -256,17 +251,14 @@ void capture_frame()
     static uint32_t framecount = 0;
     static uint64_t last_ticks = 0, fps_ticks = 0, dur_gentexture = 0, dur_readframe = 0, dur_sendframe = 0;
     uint64_t ticks = getticks_us(), trace_start, trace_end;
-    if (ticks - last_ticks < config.framedelay_us)
-    {
+    if (ticks - last_ticks < config.framedelay_us) {
         pthread_mutex_unlock(&frame_mutex);
         return;
     }
     last_ticks = ticks;
     VT_OUTPUT_INFO_T output_info;
-    if (vt_available)
-    {
-        if (texture_id != 0 && glIsTexture(texture_id))
-        {
+    if (vt_available) {
+        if (texture_id != 0 && glIsTexture(texture_id)) {
             VT_DeleteTexture(context_id, texture_id);
         }
 
@@ -275,8 +267,7 @@ void capture_frame()
         trace_end = getticks_us();
         dur_gentexture += trace_end - trace_start;
         trace_start = trace_end;
-        if (vtStatus == VT_OK)
-        {
+        if (vtStatus == VT_OK) {
             read_picture();
             trace_end = getticks_us();
             dur_readframe += trace_end - trace_start;
@@ -286,22 +277,17 @@ void capture_frame()
             dur_sendframe += trace_end - trace_start;
             trace_start = trace_end;
             framecount++;
-        }
-        else
-        {
+        } else {
             ERR("VT_GenerateTexture failed");
             texture_id = 0;
         }
         vt_available = false;
     }
-    if (fps_ticks == 0)
-    {
+    if (fps_ticks == 0) {
         fps_ticks = ticks;
-    }
-    else if (ticks - fps_ticks >= 1000000)
-    {
+    } else if (ticks - fps_ticks >= 1000000) {
         INFO("[Stat] Send framerate: %d FPS. gen %d us, read %d us, send %d us",
-               framecount, dur_gentexture, dur_readframe, dur_sendframe);
+            framecount, dur_gentexture, dur_readframe, dur_sendframe);
         framecount = 0;
         dur_gentexture = 0;
         dur_readframe = 0;
@@ -311,10 +297,9 @@ void capture_frame()
     pthread_mutex_unlock(&frame_mutex);
 }
 
-void capture_onevent(VT_EVENT_TYPE_T type, void *data, void *user_data)
+void capture_onevent(VT_EVENT_TYPE_T type, void* data, void* user_data)
 {
-    switch (type)
-    {
+    switch (type) {
     case VT_AVAILABLE:
         vt_available = true;
         capture_frame();
@@ -339,23 +324,20 @@ void read_picture()
 
     glBindTexture(GL_TEXTURE_2D, texture_id);
 
-    //Bind the texture to your FBO
+    // Bind the texture to your FBO
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture_id, 0);
 
-    //Test if everything failed
+    // Test if everything failed
     GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE)
-    {
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
         ERR("failed to make complete framebuffer object %x", status);
     }
 
     glViewport(0, 0, width, height);
 
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels_rgba);
-    for (int y = 0; y < height; y++)
-    {
-        for (int x = 0; x < width; x++)
-        {
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
             int i1 = (y * width) + x, i2 = ((height - y - 1) * width) + x;
             pixels_rgb[i1 * 3 + 0] = pixels_rgba[i2 * 4 + 0];
             pixels_rgb[i1 * 3 + 1] = pixels_rgba[i2 * 4 + 1];
