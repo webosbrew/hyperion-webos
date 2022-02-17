@@ -36,7 +36,7 @@ int hyperion_client(const char* origin, const char* hostname, int port, int prio
         return 1;
     }
     struct timeval timeout;
-    timeout.tv_sec = 5;
+    timeout.tv_sec = 1;
     timeout.tv_usec = 0;
 
     if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout,
@@ -178,7 +178,7 @@ bool _parse_reply(hyperionnet_Reply_table_t reply)
         int32_t registered = hyperionnet_Reply_registered(reply);
         if (videoMode != -1) {
             // We got a video reply.
-            printf("set video mode %d\n", videoMode);
+            // printf("set video mode %d\n", videoMode);
             return true;
         }
 

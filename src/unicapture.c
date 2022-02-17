@@ -253,6 +253,10 @@ int unicapture_run(unicapture_state_t* this)
             INFO("Buffer dumped to: %s", filename);
         }
 
+        if (this->callback != NULL) {
+            this->callback(this->callback_data, width, height, final_frame);
+        }
+
         uint64_t frame_sent = getticks_us();
 
         if (ui_frame.pixel_format != PIXFMT_INVALID) {

@@ -32,11 +32,20 @@ pkg_check_modules(GLESv2 glesv2 REQUIRED)
 
 add_executable(hyperion-webos
     src/main.c
+    src/settings.c
+    src/service.c
+    src/unicapture.c
+    src/converter.c
     src/log.c
     src/hyperion_client.c
- )
+)
+set_target_properties(hyperion-webos PROPERTIES
+    BUILD_RPATH_USE_ORIGIN ON
+    INSTALL_RPATH "$ORIGIN:$ORIGIN/lib"
+    BUILD_RPATH "$ORIGIN:$ORIGIN/lib"
+)
 target_include_directories(hyperion-webos PRIVATE fbs)
-target_link_libraries(hyperion-webos flatccrt pthread dl ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
+target_link_libraries(hyperion-webos flatccrt pthread dl yuv ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
 set_property(TARGET hyperion-webos PROPERTY ENABLE_EXPORTS 1)
 
 add_executable(unicapture-test

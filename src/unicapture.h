@@ -70,6 +70,12 @@ typedef struct _capture_backend {
     capture_release_frame_t release_frame;
 } capture_backend_t;
 
+/*
+ * Callback for submitting new image data to hyperion
+ * To be called from capture backend implementation
+ */
+typedef int (*unicapture_imagedata_callback_t)(void* data, int width, int height, uint8_t* rgb_data);
+
 typedef struct _unicapture_state {
     capture_backend_t* ui_capture;
     capture_backend_t* video_capture;
@@ -84,14 +90,20 @@ typedef struct _unicapture_state {
     pthread_t vsync_thread;
     pthread_mutex_t vsync_lock;
     pthread_cond_t vsync_cond;
+
+    unicapture_imagedata_callback_t callback;
+    void* callback_data;
 } unicapture_state_t;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+void unicapture_init(unicapture_state_t* state);
 int unicapture_try_backends(cap_backend_config_t* config, capture_backend_t* backend, char** candidates);
 int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* backend, char* name);
 int unicapture_run(unicapture_state_t* state);
+int unicapture_start(unicapture_state_t* state);
+int unicapture_stop(unicapture_state_t* state);
 #ifdef __cplusplus
 }
 #endif

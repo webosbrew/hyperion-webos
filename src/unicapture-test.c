@@ -11,7 +11,6 @@ int main(int argc, char** argv)
     capture_backend_t video_capture;
 
     char* ui_backends[] = { "libgm_backend.so", "libhalgal_backend.so", NULL };
-    // place vtcapture first because even if dile_vt is available it might not work
     char* video_backends[] = { "libvtcapture_backend.so", "libdile_vt_backend.so", NULL };
 
     unicapture_state_t up;
