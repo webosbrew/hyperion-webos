@@ -10,6 +10,7 @@
 typedef struct {
     bool running;
     bool connected;
+    bool power_paused;
 
     capture_backend_t ui_backend;
     capture_backend_t video_backend;

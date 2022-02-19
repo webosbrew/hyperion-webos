@@ -18,7 +18,6 @@ void* connection_loop(void* data)
             INFO("hyperion-client connected!");
             service->connected = true;
             while (service->connection_loop_running) {
-                INFO("reading...");
                 if (hyperion_read() < 0) {
                     ERR("Error! Connection timeout.");
                     break;
@@ -202,6 +201,46 @@ LSMethod methods[] = {
     { "restart", service_method_restart }
 };
 
+static bool power_callback(LSHandle* sh, LSMessage* msg, void* data)
+{
+    JSchemaInfo schema;
+    jvalue_ref parsed;
+    service_t* service = (service_t*)data;
+
+    INFO("Power status callback message: %s", LSMessageGetPayload(msg));
+
+    jschema_info_init(&schema, jschema_all(), NULL, NULL);
+    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(msg)), DOMOPT_NOOPT, &schema);
+
+    // Parsing failed
+    if (jis_null(parsed)) {
+        j_release(&parsed);
+        return true;
+    }
+
+    jvalue_ref state_ref = jobject_get(parsed, j_cstr_to_buffer("state"));
+    raw_buffer state_buf = jstring_get(state_ref);
+    char* state_str = state_buf.m_str;
+    bool target_state = strcmp(state_str, "Active") == 0 && !jobject_containskey(parsed, j_cstr_to_buffer("processing"));
+
+    if (!service->running && target_state && service->power_paused) {
+        INFO("Resuming after power pause...");
+        service->power_paused = false;
+        service_start(service);
+    }
+
+    if (service->running && !target_state && !service->power_paused) {
+        INFO("Pausing due to power event...");
+        service->power_paused = true;
+        service_stop(service);
+    }
+
+    jstring_free_buffer(state_buf);
+    j_release(&parsed);
+
+    return true;
+}
+
 int service_register(service_t* service, GMainLoop* loop)
 {
     LSHandle* handle = NULL;
@@ -220,6 +259,10 @@ int service_register(service_t* service, GMainLoop* loop)
 
     LSGmainAttach(handle, loop, &lserror);
 
-    LSErrorInit(&lserror);
+    if (!LSCall(handle, "luna://com.webos.service.tvpower/power/getPowerState", "{\"subscribe\":true}", power_callback, (void*)service, NULL, &lserror)) {
+        WARN("Power state monitoring call failed: %s", lserror.message);
+    }
+
+    LSErrorFree(&lserror);
     return 0;
 }
