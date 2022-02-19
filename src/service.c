@@ -2,6 +2,7 @@
 #include "hyperion_client.h"
 #include "log.h"
 #include "pthread.h"
+#include "settings.h"
 #include "unicapture.h"
 #include <luna-service2/lunaservice.h>
 #include <stdio.h>
@@ -185,13 +186,54 @@ bool service_method_is_running(LSHandle* sh, LSMessage* msg, void* data)
 bool service_method_get_settings(LSHandle* sh, LSMessage* msg, void* data)
 {
     service_t* service = (service_t*)data;
-    return false;
+    LSError lserror;
+    LSErrorInit(&lserror);
+
+    jvalue_ref jobj = jobject_create();
+
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(true));
+    settings_save_json(service->settings, jobj);
+
+    LSMessageReply(sh, msg, jvalue_tostring_simple(jobj), &lserror);
+
+    j_release(&jobj);
+
+    return true;
 }
 
 bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
 {
     service_t* service = (service_t*)data;
-    return false;
+    LSError lserror;
+    LSErrorInit(&lserror);
+
+    JSchemaInfo schema;
+    jvalue_ref parsed;
+
+    jschema_info_init(&schema, jschema_all(), NULL, NULL);
+    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(msg)), DOMOPT_NOOPT, &schema);
+
+    if (jis_null(parsed)) {
+        j_release(&parsed);
+        return false;
+    }
+
+    int res = settings_load_json(service->settings, parsed);
+    if (res == 0) {
+        if (settings_save_file(service->settings, SETTINGS_PERSISTENCE_PATH) != 0) {
+            WARN("Settings save failed");
+        }
+    }
+
+    jvalue_ref jobj = jobject_create();
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(res == 0));
+
+    LSMessageReply(sh, msg, jvalue_tostring_simple(jobj), &lserror);
+
+    j_release(&parsed);
+    j_release(&jobj);
+
+    return true;
 }
 
 bool service_method_reset_settings(LSHandle* sh, LSMessage* msg, void* data)

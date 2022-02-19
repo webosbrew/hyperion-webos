@@ -143,7 +143,7 @@ int main(int argc, char* argv[])
         INFO("Running via CLI");
     } else {
         INFO("Running as a service");
-        settings_load_file(&settings, "/media/developer/apps/usr/palm/services/org.webosbrew.piccap.service/config.json");
+        settings_load_file(&settings, SETTINGS_PERSISTENCE_PATH);
     }
 
     if ((ret = parse_options(argc, argv)) != 0) {
