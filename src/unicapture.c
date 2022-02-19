@@ -82,10 +82,10 @@ void* unicapture_vsync_handler(void* data)
     INFO("vsync thread starting...");
 
     while (this->vsync_thread_running) {
-        if (this->video_capture_running && this->video_capture->wait) {
+        if (this->vsync && this->video_capture_running && this->video_capture->wait) {
             this->video_capture->wait(this->video_capture->state);
         } else {
-            usleep(1000000 / 30);
+            usleep(1000000 / (this->fps == 0 ? 30 : this->fps));
         }
         pthread_mutex_lock(&this->vsync_lock);
         pthread_cond_signal(&this->vsync_cond);
@@ -325,6 +325,7 @@ int unicapture_run(unicapture_state_t* this)
 void unicapture_init(unicapture_state_t* this)
 {
     memset(this, 0, sizeof(unicapture_state_t));
+    this->vsync = true;
 }
 
 int unicapture_start(unicapture_state_t* this)

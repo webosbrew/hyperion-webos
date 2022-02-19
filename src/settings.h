@@ -16,9 +16,11 @@ typedef struct _settings_t {
     int fps;
     int width;
     int height;
+    bool vsync;
 
     bool no_video;
     bool no_gui;
+
     bool autostart;
 } settings_t;
 

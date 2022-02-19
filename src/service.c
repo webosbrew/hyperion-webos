@@ -58,6 +58,8 @@ int service_init(service_t* service, settings_t* settings)
     service->settings = settings;
 
     unicapture_init(&service->unicapture);
+    service->unicapture.vsync = settings->vsync;
+    service->unicapture.fps = settings->fps;
     service->unicapture.callback = &service_feed_frame;
     service->unicapture.callback_data = (void*)service;
 

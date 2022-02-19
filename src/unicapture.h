@@ -80,6 +80,9 @@ typedef struct _unicapture_state {
     capture_backend_t* ui_capture;
     capture_backend_t* video_capture;
 
+    bool vsync;
+    uint32_t fps;
+
     bool running;
     pthread_t main_thread;
 
