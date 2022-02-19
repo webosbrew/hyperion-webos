@@ -59,8 +59,9 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     INFO("HAL_GAL: gfx open ok result: %d", this->mem_fd);
 
     this->num_bytes = this->surface_info.property;
+
     if (this->num_bytes == 0)
-        this->num_bytes = this->surface_info.property * this->surface_info.height;
+        this->num_bytes = this->surface_info.pitch * this->surface_info.height;
 
     // ToDo: compare mmap(0, this->vfbprop.stride * this->vfbprop.height, PROT_READ, MAP_SHARED, this->mem_fd, this->vfbprop.ptr[vfb][plane]);
     if ((this->mem_addr = (char*)mmap(0, this->num_bytes, 3, 1, this->mem_fd, this->surface_info.offset)) == MAP_FAILED) {
@@ -125,7 +126,7 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
     frame->width = this->width;
     frame->height = this->height;
     frame->planes[0].buffer = this->mem_addr;
-    frame->planes[0].stride = this->width * 4;
+    frame->planes[0].stride = this->surface_info.pitch;
 
     return 0;
 }
