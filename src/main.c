@@ -162,7 +162,7 @@ int main(int argc, char* argv[])
         WARN("Service register failed: %d", ret);
     }
 
-    if (using_cli) {
+    if (using_cli || settings.autostart) {
         if ((ret = service_start(&service)) != 0) {
             ERR("Service startup failed: %d", ret);
             g_main_loop_quit(loop);

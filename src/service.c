@@ -4,8 +4,10 @@
 #include "pthread.h"
 #include "settings.h"
 #include "unicapture.h"
+#include <errno.h>
 #include <luna-service2/lunaservice.h>
 #include <stdio.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 void* connection_loop(void* data)
@@ -269,6 +271,21 @@ bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
     if (res == 0) {
         if (settings_save_file(service->settings, SETTINGS_PERSISTENCE_PATH) != 0) {
             WARN("Settings save failed");
+        }
+
+        const char* startup_directory = "/var/lib/webosbrew/init.d";
+        const char* startup_symlink = "/var/lib/webosbrew/init.d/piccapautostart";
+        const char* startup_script = "/media/developer/apps/usr/palm/services/org.webosbrew.piccap.service/piccapautostart";
+
+        if (unlink(startup_symlink) != 0 && errno != ENOENT) {
+            WARN("Startup symlink removal failed: %d", errno);
+        }
+
+        if (service->settings->autostart) {
+            mkdir(startup_directory, 0755);
+            if (symlink(startup_script, startup_symlink) != 0) {
+                WARN("Startup symlink creation failed: %d", errno);
+            }
         }
     }
 
