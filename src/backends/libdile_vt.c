@@ -151,6 +151,10 @@ int capture_init(cap_backend_config_t* config, void** state_p)
         for (int plane = 0; plane < this->vfbcap.numPlanes; plane++) {
             DBG("[DILE_VT] vfb[%d][%d] = 0x%08x", vfb, plane, this->vfbprop.ptr[vfb][plane]);
             this->vfbs[vfb][plane] = (uint8_t*)mmap(0, this->vfbprop.stride * this->vfbprop.height, PROT_READ, MAP_SHARED, this->mem_fd, this->vfbprop.ptr[vfb][plane]);
+            if (this->vfbs[vfb][plane] == MAP_FAILED) {
+                ret = -7;
+                goto err_mmap;
+            }
         }
     }
 
