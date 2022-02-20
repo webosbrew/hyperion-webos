@@ -348,6 +348,89 @@ static bool power_callback(LSHandle* sh __attribute__((unused)), LSMessage* msg,
     return true;
 }
 
+static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage* msg, void* data)
+{
+    JSchemaInfo schema;
+    jvalue_ref parsed;
+    service_t* service = (service_t*)data;
+
+    // INFO("Videooutput status callback message: %s", LSMessageGetPayload(msg));
+
+    jschema_info_init(&schema, jschema_all(), NULL, NULL);
+    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(msg)), DOMOPT_NOOPT, &schema);
+
+    // Parsing failed
+    if (jis_null(parsed)) {
+        j_release(&parsed);
+        return false; // was true; why?
+    }
+
+    // Get to the information we want (hdrType)
+    jvalue_ref video_ref = jobject_get(parsed, j_cstr_to_buffer("video"));
+    if (jis_null(video_ref) || !jis_valid(video_ref)) {
+        j_release(&parsed);
+        return false;
+    }
+    jvalue_ref video_0_ref = jarray_get(video_ref, 0); // should always be index 0 = main screen ?!
+    if (jis_null(video_0_ref) || !jis_valid(video_0_ref)) {
+        j_release(&parsed);
+        return false;
+    }
+    jvalue_ref video_info_ref = jobject_get(video_0_ref, j_cstr_to_buffer("videoInfo"));
+    if (jis_null(video_info_ref) || !jis_valid(video_info_ref)) {
+        j_release(&parsed);
+        return false;
+    }
+    jvalue_ref hdr_type_ref = jobject_get(video_info_ref, j_cstr_to_buffer("hdrType"));
+    if (jis_null(hdr_type_ref) || !jis_valid(hdr_type_ref) || !jis_string(hdr_type_ref)) {
+        j_release(&parsed);
+        return false;
+    }
+
+    raw_buffer hdr_type_buf = jstring_get(hdr_type_ref);
+    const char* hdr_type_str = hdr_type_buf.m_str;
+
+    char hdr_enabled_str[8];
+    char command_str[256];
+
+    if (strcmp(hdr_type_str, "none") == 0) {
+        INFO("hdrType: %s --> SDR mode", hdr_type_str);
+        sprintf(hdr_enabled_str, "false");
+    }
+    else if (strcmp(hdr_type_str, "HDR10") == 0) {
+        INFO("hdrType: %s --> HDR mode", hdr_type_str);
+        sprintf(hdr_enabled_str, "true");
+    }
+    else if (strcmp(hdr_type_str, "DolbyVision") == 0) {
+        INFO("hdrType: %s --> HDR mode", hdr_type_str);
+        sprintf(hdr_enabled_str, "true");
+    }
+    else {
+        INFO("hdrType: %s (unknown) --> SDR mode", hdr_type_str);
+        sprintf(hdr_enabled_str, "false");
+    }
+
+    // fixed to HyperHDR's standard port 8090 for now
+    sprintf(command_str, "curl -s http://%s:8090/json-rpc?request=%%7B%%22command%%22:%%22componentstate%%22,%%22componentstate%%22:%%7B%%22component%%22:%%22HDR%%22,%%22state%%22:%s%%7D%%7D > /dev/null", 
+            service->settings->address, hdr_enabled_str);
+    system(command_str);
+
+    // // testing
+    // jvalue_ref command_ref = jobject_create_var(
+    //     jkeyval(jstring_create("command"), jstring_create("componentstate")), 
+    //     jkeyval(jstring_create("componentstate"), jobject_create_var(
+    //         jkeyval(jstring_create("component"), jstring_create("HDR")),
+    //         jkeyval(jstring_create("state"), jstring_create(hdr_enabled_str)),
+    //         NULL)),
+    //     NULL);
+    // j_release(&command_ref);
+
+    jstring_free_buffer(hdr_type_buf);
+    j_release(&parsed);
+
+    return true;
+}
+
 int service_register(service_t* service, GMainLoop* loop)
 {
     LSHandle* handle = NULL;
@@ -378,6 +461,10 @@ int service_register(service_t* service, GMainLoop* loop)
 
     if (!LSCall(handle, "luna://com.webos.service.tvpower/power/getPowerState", "{\"subscribe\":true}", power_callback, (void*)service, NULL, &lserror)) {
         WARN("Power state monitoring call failed: %s", lserror.message);
+    }
+
+    if (!LSCall(handle, "luna://com.webos.service.videooutput/getStatus", "{\"subscribe\":true}", videooutput_callback, (void*)service, NULL, &lserror)) {
+        WARN("videooutput/getStatus call failed: %s", lserror.message);
     }
 
     LSErrorFree(&lserror);
