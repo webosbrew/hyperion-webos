@@ -37,6 +37,7 @@ add_executable(hyperion-webos
     src/unicapture.c
     src/converter.c
     src/log.c
+    src/utils.c
     src/hyperion_client.c
 )
 set_target_properties(hyperion-webos PROPERTIES
@@ -46,6 +47,7 @@ set_target_properties(hyperion-webos PROPERTIES
 )
 target_include_directories(hyperion-webos PRIVATE fbs)
 target_link_libraries(hyperion-webos flatccrt pthread dl yuv ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
+target_compile_options(hyperion-webos PRIVATE -Wall -Wextra -Wpedantic -Werror)
 set_property(TARGET hyperion-webos PROPERTY ENABLE_EXPORTS 1)
 
 add_executable(unicapture-test
@@ -53,6 +55,7 @@ add_executable(unicapture-test
     src/unicapture.c
     src/converter.c
     src/log.c
+    src/utils.c
 )
 set_target_properties(unicapture-test PROPERTIES
     BUILD_RPATH_USE_ORIGIN ON
@@ -68,12 +71,14 @@ add_library(gm_backend SHARED
 )
 target_include_directories(gm_backend PRIVATE src src/backends)
 target_link_libraries(gm_backend gm)
+target_compile_options(gm_backend PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 add_library(dile_vt_backend SHARED
     src/backends/libdile_vt.c
 )
 target_include_directories(dile_vt_backend PRIVATE src src/backends)
 target_link_libraries(dile_vt_backend dile_vt)
+target_compile_options(dile_vt_backend PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 # libdile_vt.so seems to be missing DT_NEEDED for libPmLogLib.so.3 - let's just
 # add it over to our library. For some reason adding PmLogLib loaded via
@@ -85,12 +90,14 @@ add_library(halgal_backend SHARED
 )
 target_include_directories(halgal_backend PRIVATE src src/backends)
 target_link_libraries(halgal_backend halgal)
+target_compile_options(halgal_backend PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 add_library(vtcapture_backend SHARED
     src/backends/libvtcapture.cpp
 )
 target_include_directories(vtcapture_backend PRIVATE src src/backends)
 target_link_libraries(vtcapture_backend vtcapture)
+target_compile_options(vtcapture_backend PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 # Legacy backends
 add_library(vt_legacy_backend SHARED

@@ -4,8 +4,8 @@
 #include "unicapture.h"
 
 typedef struct _gm_backend_state {
-    int width;
-    int height;
+    uint32_t width;
+    uint32_t height;
     GM_SURFACE surface_info;
 } gm_backend_state_t;
 
@@ -35,15 +35,15 @@ int capture_cleanup(void* state)
     return 0;
 }
 
-int capture_start(void* state) { return 0; }
-int capture_terminate(void* state) { return 0; }
+int capture_start(void* state __attribute__((unused))) { return 0; }
+int capture_terminate(void* state __attribute__((unused))) { return 0; }
 
 int capture_acquire_frame(void* state, frame_info_t* frame)
 {
     gm_backend_state_t* this = (gm_backend_state_t*)state;
     int ret = 0;
-    int width = this->width;
-    int height = this->height;
+    uint32_t width = this->width;
+    uint32_t height = this->height;
 
     if ((ret = GM_CaptureGraphicScreen(this->surface_info.surfaceID, &width, &height)) != 0) {
         return ret;
@@ -58,12 +58,12 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
     return 0;
 }
 
-int capture_release_frame(void* state, frame_info_t* frame)
+int capture_release_frame(void* state __attribute__((unused)), frame_info_t* frame __attribute__((unused)))
 {
     return 0;
 }
 
-int capture_wait(void* state)
+int capture_wait(void* state __attribute__((unused)))
 {
     return 0;
 }

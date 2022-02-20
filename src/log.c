@@ -1,4 +1,5 @@
 #include "log.h"
+#include "utils.h"
 #include <PmLogLib.h>
 #include <stdint.h>
 #include <time.h>
@@ -6,13 +7,6 @@
 uint64_t start = 0;
 PmLogContext context;
 LogLevel current_log_level = Info;
-
-uint64_t getticks_us()
-{
-    struct timespec tp;
-    clock_gettime(CLOCK_MONOTONIC, &tp);
-    return tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
-}
 
 void log_init()
 {

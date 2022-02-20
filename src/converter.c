@@ -15,6 +15,7 @@ int converter_release(converter_t* converter)
             free(converter->buffers[i]);
         }
     }
+    return 0;
 }
 
 /**

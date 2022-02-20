@@ -1,11 +1,12 @@
 #include "unicapture.h"
 #include "converter.h"
 #include "log.h"
+#include "utils.h"
 #include <dlfcn.h>
 #include <libyuv.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <time.h>
+#include <string.h>
 #include <unistd.h>
 
 #define DLSYM_ERROR_CHECK()                         \
@@ -13,13 +14,6 @@
         ERR("Error! dlsym failed, msg: %s", error); \
         return -2;                                  \
     }
-
-static uint64_t getticks_us()
-{
-    struct timespec tp;
-    clock_gettime(CLOCK_MONOTONIC, &tp);
-    return tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
-}
 
 int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* backend, char* name)
 {
@@ -35,22 +29,22 @@ int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* bac
 
     dlerror();
 
-    backend->init = dlsym(handle, "capture_init");
+    *(void**)(&backend->init) = dlsym(handle, "capture_init");
     DLSYM_ERROR_CHECK();
-    backend->cleanup = dlsym(handle, "capture_cleanup");
-    DLSYM_ERROR_CHECK();
-
-    backend->start = dlsym(handle, "capture_start");
-    DLSYM_ERROR_CHECK();
-    backend->terminate = dlsym(handle, "capture_terminate");
+    *(void**)(&backend->cleanup) = dlsym(handle, "capture_cleanup");
     DLSYM_ERROR_CHECK();
 
-    backend->acquire_frame = dlsym(handle, "capture_acquire_frame");
+    *(void**)(&backend->start) = dlsym(handle, "capture_start");
     DLSYM_ERROR_CHECK();
-    backend->release_frame = dlsym(handle, "capture_release_frame");
+    *(void**)(&backend->terminate) = dlsym(handle, "capture_terminate");
     DLSYM_ERROR_CHECK();
 
-    backend->wait = dlsym(handle, "capture_wait");
+    *(void**)(&backend->acquire_frame) = dlsym(handle, "capture_acquire_frame");
+    DLSYM_ERROR_CHECK();
+    *(void**)(&backend->release_frame) = dlsym(handle, "capture_release_frame");
+    DLSYM_ERROR_CHECK();
+
+    *(void**)(&backend->wait) = dlsym(handle, "capture_wait");
     DLSYM_ERROR_CHECK();
 
     DBG("%s: loaded, initializing...", name);
@@ -93,10 +87,13 @@ void* unicapture_vsync_handler(void* data)
     }
 
     INFO("vsync thread finished");
+
+    return NULL;
 }
 
-int unicapture_run(unicapture_state_t* this)
+void* unicapture_run(void* data)
 {
+    unicapture_state_t* this = (unicapture_state_t*)data;
     capture_backend_t* ui_capture = this->ui_capture;
     capture_backend_t* video_capture = this->video_capture;
 
@@ -321,6 +318,8 @@ int unicapture_run(unicapture_state_t* this)
     converter_release(&ui_converter);
     converter_release(&video_converter);
     DBG("Done!");
+
+    return NULL;
 }
 
 void unicapture_init(unicapture_state_t* this)

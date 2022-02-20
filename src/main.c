@@ -11,7 +11,7 @@ settings_t settings;
 service_t service;
 bool using_cli = false;
 
-void int_handler(int dummy)
+void int_handler(int signum __attribute__((unused)))
 {
     INFO("SIGINT detected, stopping...");
     g_main_loop_quit(loop);

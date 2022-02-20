@@ -41,13 +41,14 @@ void* connection_loop(void* data)
     return 0;
 }
 
-void service_feed_frame(void* data, int width, int height, uint8_t rgb_data)
+int service_feed_frame(void* data __attribute__((unused)), int width, int height, uint8_t* rgb_data)
 {
-    service_t* service = (service_t*)data;
     int ret;
     if ((ret = hyperion_set_image(rgb_data, width, height)) != 0) {
         WARN("Frame sending failed: %d", ret);
     }
+
+    return 0;
 }
 
 int service_init(service_t* service, settings_t* settings)
@@ -184,15 +185,13 @@ bool service_method_stop(LSHandle* sh, LSMessage* msg, void* data)
     return false;
 }
 
-bool service_method_restart(LSHandle* sh, LSMessage* msg, void* data)
+bool service_method_restart(LSHandle* sh __attribute__((unused)), LSMessage* msg __attribute__((unused)), void* data __attribute__((unused)))
 {
-    service_t* service = (service_t*)data;
     return false;
 }
 
-bool service_method_is_root(LSHandle* sh, LSMessage* msg, void* data)
+bool service_method_is_root(LSHandle* sh, LSMessage* msg, void* data __attribute__((unused)))
 {
-    service_t* service = (service_t*)data;
     LSError lserror;
     LSErrorInit(&lserror);
 
@@ -284,26 +283,25 @@ bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
     return true;
 }
 
-bool service_method_reset_settings(LSHandle* sh, LSMessage* msg, void* data)
+bool service_method_reset_settings(LSHandle* sh __attribute__((unused)), LSMessage* msg __attribute__((unused)), void* data __attribute__((unused)))
 {
-    service_t* service = (service_t*)data;
     return false;
 }
 
 LSMethod methods[] = {
-    { "start", service_method_start },
-    { "stop", service_method_stop },
-    { "isRoot", service_method_is_root },
+    { "start", service_method_start, LUNA_METHOD_FLAGS_NONE },
+    { "stop", service_method_stop, LUNA_METHOD_FLAGS_NONE },
+    { "isRoot", service_method_is_root, LUNA_METHOD_FLAGS_NONE },
     // DEPRECATED
-    { "isRunning", service_method_status },
-    { "status", service_method_status },
-    { "getSettings", service_method_get_settings },
-    { "setSettings", service_method_set_settings },
-    { "resetSettings", service_method_reset_settings },
-    { "restart", service_method_restart }
+    { "isRunning", service_method_status, LUNA_METHOD_FLAGS_NONE },
+    { "status", service_method_status, LUNA_METHOD_FLAGS_NONE },
+    { "getSettings", service_method_get_settings, LUNA_METHOD_FLAGS_NONE },
+    { "setSettings", service_method_set_settings, LUNA_METHOD_FLAGS_NONE },
+    { "resetSettings", service_method_reset_settings, LUNA_METHOD_FLAGS_NONE },
+    { "restart", service_method_restart, LUNA_METHOD_FLAGS_NONE }
 };
 
-static bool power_callback(LSHandle* sh, LSMessage* msg, void* data)
+static bool power_callback(LSHandle* sh __attribute__((unused)), LSMessage* msg, void* data)
 {
     JSchemaInfo schema;
     jvalue_ref parsed;
@@ -322,7 +320,7 @@ static bool power_callback(LSHandle* sh, LSMessage* msg, void* data)
 
     jvalue_ref state_ref = jobject_get(parsed, j_cstr_to_buffer("state"));
     raw_buffer state_buf = jstring_get(state_ref);
-    char* state_str = state_buf.m_str;
+    const char* state_str = state_buf.m_str;
     bool target_state = strcmp(state_str, "Active") == 0 && !jobject_containskey(parsed, j_cstr_to_buffer("processing"));
 
     if (!service->running && target_state && service->power_paused) {

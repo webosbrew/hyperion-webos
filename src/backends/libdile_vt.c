@@ -8,11 +8,13 @@
 #include <pthread.h>
 #include <sys/mman.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include <dile_vt.h>
 
 #include "log.h"
 #include "unicapture.h"
+#include "utils.h"
 
 typedef struct _dile_vt_backend_state {
     DILE_VT_HANDLE vth;
@@ -26,7 +28,7 @@ typedef struct _dile_vt_backend_state {
 int capture_init(cap_backend_config_t* config, void** state_p)
 {
     int ret = 0;
-    DILE_VT_HANDLE vth;
+    DILE_VT_HANDLE vth = NULL;
 
     INFO("Capture start called.");
 
@@ -75,7 +77,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     }
 
     if (DILE_VT_SetVideoFrameOutputDeviceOutputRegion(vth, DILE_VT_DISPLAY_OUTPUT, &region) != 0) {
-        ret = -2;
+        ret = -3;
         goto err_destroy;
     }
 
@@ -126,7 +128,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 
     INFO("[DILE_VT] vfbs: %d; planes: %d", this->vfbcap.numVfbs, this->vfbcap.numPlanes);
     uint32_t** ptr = calloc(sizeof(uint32_t*), this->vfbcap.numVfbs);
-    for (int vfb = 0; vfb < this->vfbcap.numVfbs; vfb++) {
+    for (uint32_t vfb = 0; vfb < this->vfbcap.numVfbs; vfb++) {
         ptr[vfb] = calloc(sizeof(uint32_t), this->vfbcap.numPlanes);
     }
 
@@ -146,9 +148,9 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 
     INFO("[DILE_VT] pixelFormat: %d; width: %d; height: %d; stride: %d...", this->vfbprop.pixelFormat, this->vfbprop.width, this->vfbprop.height, this->vfbprop.stride);
     this->vfbs = calloc(this->vfbcap.numVfbs, sizeof(uint8_t**));
-    for (int vfb = 0; vfb < this->vfbcap.numVfbs; vfb++) {
+    for (uint32_t vfb = 0; vfb < this->vfbcap.numVfbs; vfb++) {
         this->vfbs[vfb] = calloc(this->vfbcap.numPlanes, sizeof(uint8_t*));
-        for (int plane = 0; plane < this->vfbcap.numPlanes; plane++) {
+        for (uint32_t plane = 0; plane < this->vfbcap.numPlanes; plane++) {
             DBG("[DILE_VT] vfb[%d][%d] = 0x%08x", vfb, plane, this->vfbprop.ptr[vfb][plane]);
             this->vfbs[vfb][plane] = (uint8_t*)mmap(0, this->vfbprop.stride * this->vfbprop.height, PROT_READ, MAP_SHARED, this->mem_fd, this->vfbprop.ptr[vfb][plane]);
             if (this->vfbs[vfb][plane] == MAP_FAILED) {
@@ -233,7 +235,7 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
     return 0;
 }
 
-int capture_release_frame(void* state, frame_info_t* frame)
+int capture_release_frame(void* state, frame_info_t* frame __attribute__((unused)))
 {
     dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
     this->output_state.freezed = 0;

@@ -108,7 +108,6 @@ extern "C" {
 void unicapture_init(unicapture_state_t* state);
 int unicapture_try_backends(cap_backend_config_t* config, capture_backend_t* backend, char** candidates);
 int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* backend, char* name);
-int unicapture_run(unicapture_state_t* state);
 int unicapture_start(unicapture_state_t* state);
 int unicapture_stop(unicapture_state_t* state);
 #ifdef __cplusplus
