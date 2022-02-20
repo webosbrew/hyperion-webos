@@ -96,6 +96,10 @@ typedef struct _unicapture_state {
 
     unicapture_imagedata_callback_t callback;
     void* callback_data;
+
+    struct {
+        double framerate;
+    } metrics;
 } unicapture_state_t;
 
 #ifdef __cplusplus

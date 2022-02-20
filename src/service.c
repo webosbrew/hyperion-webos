@@ -6,6 +6,7 @@
 #include "unicapture.h"
 #include <luna-service2/lunaservice.h>
 #include <stdio.h>
+#include <unistd.h>
 
 void* connection_loop(void* data)
 {
@@ -154,14 +155,32 @@ int service_stop(service_t* service)
 bool service_method_start(LSHandle* sh, LSMessage* msg, void* data)
 {
     service_t* service = (service_t*)data;
-    service_start(service);
+    LSError lserror;
+    LSErrorInit(&lserror);
+
+    jvalue_ref jobj = jobject_create();
+
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(service_start(service) == 0));
+
+    LSMessageReply(sh, msg, jvalue_tostring_simple(jobj), &lserror);
+
+    j_release(&jobj);
     return false;
 }
 
 bool service_method_stop(LSHandle* sh, LSMessage* msg, void* data)
 {
     service_t* service = (service_t*)data;
-    service_stop(service);
+    LSError lserror;
+    LSErrorInit(&lserror);
+
+    jvalue_ref jobj = jobject_create();
+
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(service_stop(service) == 0));
+
+    LSMessageReply(sh, msg, jvalue_tostring_simple(jobj), &lserror);
+
+    j_release(&jobj);
     return false;
 }
 
@@ -174,13 +193,42 @@ bool service_method_restart(LSHandle* sh, LSMessage* msg, void* data)
 bool service_method_is_root(LSHandle* sh, LSMessage* msg, void* data)
 {
     service_t* service = (service_t*)data;
-    return false;
+    LSError lserror;
+    LSErrorInit(&lserror);
+
+    jvalue_ref jobj = jobject_create();
+
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(true));
+    jobject_set(jobj, j_cstr_to_buffer("rootStatus"), jboolean_create(getuid() == 0));
+
+    LSMessageReply(sh, msg, jvalue_tostring_simple(jobj), &lserror);
+
+    j_release(&jobj);
+
+    return true;
 }
 
-bool service_method_is_running(LSHandle* sh, LSMessage* msg, void* data)
+bool service_method_status(LSHandle* sh, LSMessage* msg, void* data)
 {
     service_t* service = (service_t*)data;
-    return false;
+    jvalue_ref jobj = jobject_create();
+    LSError lserror;
+    LSErrorInit(&lserror);
+
+    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(true));
+    jobject_set(jobj, j_cstr_to_buffer("isRunning"), jboolean_create(service->running));
+    jobject_set(jobj, j_cstr_to_buffer("connected"), jboolean_create(service->connected));
+    jobject_set(jobj, j_cstr_to_buffer("videoBackend"), service->video_backend.name ? jstring_create(service->video_backend.name) : jnull());
+    jobject_set(jobj, j_cstr_to_buffer("videoRunning"), jboolean_create(service->unicapture.video_capture_running));
+    jobject_set(jobj, j_cstr_to_buffer("uiBackend"), service->ui_backend.name ? jstring_create(service->ui_backend.name) : jnull());
+    jobject_set(jobj, j_cstr_to_buffer("uiRunning"), jboolean_create(service->unicapture.ui_capture_running));
+    jobject_set(jobj, j_cstr_to_buffer("framerate"), jnumber_create_f64(service->unicapture.metrics.framerate));
+
+    LSMessageReply(sh, msg, jvalue_tostring_simple(jobj), &lserror);
+
+    j_release(&jobj);
+
+    return true;
 }
 
 bool service_method_get_settings(LSHandle* sh, LSMessage* msg, void* data)
@@ -246,7 +294,9 @@ LSMethod methods[] = {
     { "start", service_method_start },
     { "stop", service_method_stop },
     { "isRoot", service_method_is_root },
-    { "isRunning", service_method_is_running },
+    // DEPRECATED
+    { "isRunning", service_method_status },
+    { "status", service_method_status },
     { "getSettings", service_method_get_settings },
     { "setSettings", service_method_set_settings },
     { "resetSettings", service_method_reset_settings },
