@@ -32,15 +32,11 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 
     INFO("Capture start called.");
 
-    if (&DILE_VT_CreateEx != 0) {
-        vth = DILE_VT_CreateEx(0, 1);
-        if (vth == NULL) {
-            WARN("DILE_VT_CreateEx failed, attempting DILE_VT_Create...");
-        }
-    }
+    vth = DILE_VT_Create(0);
 
-    if (vth == NULL) {
-        vth = DILE_VT_Create(0);
+    if (vth == NULL && &DILE_VT_CreateEx != 0) {
+        WARN("DILE_VT_Create failed, attempting DILE_VT_CreateEx...");
+        vth = DILE_VT_CreateEx(0, 1);
     }
 
     if (vth == NULL) {
