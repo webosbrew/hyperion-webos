@@ -104,7 +104,7 @@ int capture_start(void* state)
     }
     INFO("vtCapture_init done! Caller_ID: %s Client ID: %s", caller, self->client);
 
-    if ((vtCapture_preprocess(self->driver, self->client, &self->props)) == 1) {
+    if ((ret = vtCapture_preprocess(self->driver, self->client, &self->props)) == 1) {
 
         ERR("vtCapture_preprocess not ready yet return: %d", ret);
         ret = -5;

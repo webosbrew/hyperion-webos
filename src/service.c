@@ -278,13 +278,13 @@ bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
         const char* startup_script = "/media/developer/apps/usr/palm/services/org.webosbrew.piccap.service/piccapautostart";
 
         if (unlink(startup_symlink) != 0 && errno != ENOENT) {
-            WARN("Startup symlink removal failed: %d", errno);
+            WARN("Startup symlink removal failed: %s", strerror(errno));
         }
 
         if (service->settings->autostart) {
             mkdir(startup_directory, 0755);
             if (symlink(startup_script, startup_symlink) != 0) {
-                WARN("Startup symlink creation failed: %d", errno);
+                WARN("Startup symlink creation failed: %s", strerror(errno));
             }
         }
     }

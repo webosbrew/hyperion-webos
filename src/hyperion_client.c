@@ -1,6 +1,8 @@
 #include "hyperion_client.h"
+#include "log.h"
 
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdbool.h>
@@ -32,7 +34,7 @@ int hyperion_client(const char* origin, const char* hostname, int port, int prio
     sockfd = 0;
     struct sockaddr_in serv_addr;
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        fprintf(stderr, "Error : Could not create socket \n");
+        WARN("Could not create socket: %s", strerror(errno));
         return 1;
     }
     struct timeval timeout;
@@ -42,14 +44,14 @@ int hyperion_client(const char* origin, const char* hostname, int port, int prio
     if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout,
             sizeof(timeout))
         < 0) {
-        fprintf(stderr, "setsockopt failed\n");
+        WARN("setsockopt(SO_SNDTIMEO) failed: %s", strerror(errno));
         return 1;
     }
 
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout,
             sizeof(timeout))
         < 0) {
-        fprintf(stderr, "setsockopt failed\n");
+        WARN("setsockopt(SO_RCVTIMEO) failed: %s", strerror(errno));
         return 1;
     }
 
@@ -59,12 +61,12 @@ int hyperion_client(const char* origin, const char* hostname, int port, int prio
     serv_addr.sin_port = htons(port);
 
     if (inet_pton(AF_INET, hostname, &serv_addr.sin_addr) <= 0) {
-        printf("\n inet_pton error occured\n");
+        WARN("inet_pton error occured (hostname: %s): %s", hostname, strerror(errno));
         return 1;
     }
 
     if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-        printf("\n Error : Connect Failed \n");
+        WARN("connect() to %s:%d failed: %s", hostname, port, strerror(errno));
         return 1;
     }
     _connected = true;
@@ -190,7 +192,7 @@ bool _parse_reply(hyperionnet_Reply_table_t reply)
         return true;
     } else {
         flatbuffers_string_t error = hyperionnet_Reply_error(reply);
-        fprintf(stderr, "Error from server: %s\n", error);
+        WARN("Error received from server: %s", error);
     }
 
     return false;
