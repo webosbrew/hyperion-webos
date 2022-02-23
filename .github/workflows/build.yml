@@ -30,7 +30,7 @@ jobs:
     - name: Build component
       working-directory: ${{github.workspace}}/build
       shell: bash
-      run: cmake .. && make
+      run: cmake .. && make hyperion-webos gm_backend halgal_backend dile_vt_backend vtcapture_backend
 
     - name: List files
       run: find .
@@ -41,6 +41,4 @@ jobs:
         name: hyperion_webos
         path: |
           ${{github.workspace}}/build/hyperion-webos
-          ${{github.workspace}}/build/libdile_vt_backend.so
-          ${{github.workspace}}/build/libvt_backend.so
-          ${{github.workspace}}/build/libvtcapture_backend.so
+          ${{github.workspace}}/build/*.so
