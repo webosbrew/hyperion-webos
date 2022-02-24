@@ -407,17 +407,62 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
             service->settings->address, hdr_enabled_str);
     system(command_str);
 
-    // // testing
-    // jvalue_ref command_ref = jobject_create_var(
-    //     jkeyval(jstring_create("command"), jstring_create("componentstate")), 
-    //     jkeyval(jstring_create("componentstate"), jobject_create_var(
-    //         jkeyval(jstring_create("component"), jstring_create("HDR")),
-    //         jkeyval(jstring_create("state"), jstring_create(hdr_enabled_str)),
-    //         NULL)),
-    //     NULL);
-    // j_release(&command_ref);
-
     jstring_free_buffer(hdr_type_buf);
+    j_release(&parsed);
+
+    return true;
+}
+
+static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* msg, void* data)
+{
+    JSchemaInfo schema;
+    jvalue_ref parsed;
+    service_t* service = (service_t*)data;
+
+    // INFO("getSystemSettings/picture status callback message: %s", LSMessageGetPayload(msg));
+
+    jschema_info_init(&schema, jschema_all(), NULL, NULL);
+    parsed = jdom_parse(j_cstr_to_buffer(LSMessageGetPayload(msg)), DOMOPT_NOOPT, &schema);
+
+    // Parsing failed
+    if (jis_null(parsed)) {
+        j_release(&parsed);
+        return false; // was true; why?
+    }
+
+    // Get to the information we want (dynamicRange)
+    jvalue_ref dimension_ref = jobject_get(parsed, j_cstr_to_buffer("dimension"));
+    if (jis_null(dimension_ref) || !jis_valid(dimension_ref)) {
+        j_release(&parsed);
+        return false;
+    }
+    jvalue_ref dynamic_range_ref = jobject_get(dimension_ref, j_cstr_to_buffer("dynamicRange"));
+    if (jis_null(dynamic_range_ref) || !jis_valid(dynamic_range_ref) || !jis_string(dynamic_range_ref)) {
+        j_release(&parsed);
+        return false;
+    }
+
+    raw_buffer dynamic_range_buf = jstring_get(dynamic_range_ref);
+    const char* dynamic_range_str = dynamic_range_buf.m_str;
+
+    char hdr_enabled_str[8];
+    char command_str[256];
+
+    if (strcmp(dynamic_range_str, "sdr") == 0) {
+        INFO("dynamicRange: %s --> SDR mode", dynamic_range_str);
+        sprintf(hdr_enabled_str, "false");
+    }
+    else {
+        INFO("dynamicRange: %s --> HDR mode", dynamic_range_str);
+        sprintf(hdr_enabled_str, "true");
+    }
+
+    // fixed to HyperHDR's standard port 8090 for now
+    sprintf(command_str, "curl -s http://%s:8090/json-rpc?request=%%7B%%22command%%22:%%22componentstate%%22,%%22componentstate%%22:%%7B%%22component%%22:%%22HDR%%22,%%22state%%22:%s%%7D%%7D > /dev/null", 
+            service->settings->address, hdr_enabled_str);
+    system(command_str);
+
+    jstring_free_buffer(dynamic_range_buf);
     j_release(&parsed);
 
     return true;
@@ -457,6 +502,10 @@ int service_register(service_t* service, GMainLoop* loop)
 
     if (!LSCall(handle, "luna://com.webos.service.videooutput/getStatus", "{\"subscribe\":true}", videooutput_callback, (void*)service, NULL, &lserror)) {
         WARN("videooutput/getStatus call failed: %s", lserror.message);
+    }
+
+    if (!LSCall(handle, "luna://com.webos.settingsservice/getSystemSettings", "{\"category\":\"picture\",\"subscribe\":true}", picture_callback, (void*)service, NULL, &lserror)) {
+        WARN("settingsservice/getSystemSettings call failed: %s", lserror.message);
     }
 
     LSErrorFree(&lserror);
