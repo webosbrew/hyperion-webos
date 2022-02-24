@@ -397,17 +397,9 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
         INFO("hdrType: %s --> SDR mode", hdr_type_str);
         sprintf(hdr_enabled_str, "false");
     }
-    else if (strcmp(hdr_type_str, "HDR10") == 0) {
-        INFO("hdrType: %s --> HDR mode", hdr_type_str);
-        sprintf(hdr_enabled_str, "true");
-    }
-    else if (strcmp(hdr_type_str, "DolbyVision") == 0) {
-        INFO("hdrType: %s --> HDR mode", hdr_type_str);
-        sprintf(hdr_enabled_str, "true");
-    }
     else {
-        INFO("hdrType: %s (unknown) --> SDR mode", hdr_type_str);
-        sprintf(hdr_enabled_str, "false");
+        INFO("hdrType: %s --> HDR mode", hdr_type_str);
+        sprintf(hdr_enabled_str, "true");
     }
 
     // fixed to HyperHDR's standard port 8090 for now
