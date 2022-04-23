@@ -3,6 +3,12 @@ name: Build
 on:
   push:
 
+env:
+  TOOLCHAIN_URL: https://github.com/openlgtv/buildroot-nc4/releases/download/webos-9f5b1a1/arm-webos-linux-gnueabi_sdk-buildroot.tar.gz
+  TOOLCHAIN_SHA256: de49688d9d04bd533da59beb9a21e940203b95cc6ad4958858273b53502eb99b
+  TOOLCHAIN_DIR: /opt/arm-webos-linux-gnueabi_sdk-buildroot
+  TOOLCHAIN_FILE: /opt/arm-webos-linux-gnueabi_sdk-buildroot/share/buildroot/toolchainfile.cmake
+
 jobs:
   build-native-component:
     runs-on: ubuntu-latest
@@ -12,14 +18,17 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Download webOS NDK
-      run: wget -q https://github.com/webosbrew/meta-lg-webos-ndk/releases/download/1.0.g-rev.4/webos-sdk-x86_64-armv7a-neon-toolchain-1.0.g.sh -P ${{github.workspace}}/temp
+    - name: Download and unpack toolchain
+      working-directory: /opt
+      run: |
+        wget -q -O toolchain.tar.gz ${TOOLCHAIN_URL}
+        echo "${TOOLCHAIN_SHA256} toolchain.tar.gz"|sha256sum -c -
+        tar xf toolchain.tar.gz
 
-    - name: Install webOS NDK
-      run: chmod 755 ${{github.workspace}}/temp/webos-sdk-x86_64-armv7a-neon-toolchain-1.0.g.sh && sudo ${{github.workspace}}/temp/webos-sdk-x86_64-armv7a-neon-toolchain-1.0.g.sh -y
-
-    - name: Initialize NDK Environments
-      run: env -i bash -c '. /opt/webos-sdk-x86_64/1.0.g/environment-setup-armv7a-neon-webos-linux-gnueabi && env' >> $GITHUB_ENV
+    - name: Relocate toolchain
+      working-directory: ${{ env.TOOLCHAIN_DIR }}
+      run: |
+        ./relocate-sdk.sh
 
     - name: CMake Version
       run: cmake --version
@@ -30,7 +39,7 @@ jobs:
     - name: Build component
       working-directory: ${{github.workspace}}/build
       shell: bash
-      run: cmake .. && make
+      run: cmake -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE .. && make
 
     - name: List files
       run: find .

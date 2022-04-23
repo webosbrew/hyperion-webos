@@ -36,7 +36,7 @@ add_executable(hyperion-webos
     src/hyperion_client.c
  )
 target_include_directories(hyperion-webos PRIVATE fbs)
-target_link_libraries(hyperion-webos flatccrt pthread dl ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
+target_link_libraries(hyperion-webos flatccrt pthread dl rt ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
 set_property(TARGET hyperion-webos PROPERTY ENABLE_EXPORTS 1)
 
 # Backends
