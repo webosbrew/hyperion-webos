@@ -25,6 +25,12 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     this->height = config->resolution_height;
 
     INFO("Graphical capture enabled. Begin init..");
+    if (getuid() != 0) {
+        ERR("Init for graphical capture not possible. Not running as root!");
+        ret = -1;
+        return ret;
+    }
+
     if ((ret = HAL_GAL_Init()) != 0) {
 
         ERR("HAL_GAL_Init failed: %x", ret);
