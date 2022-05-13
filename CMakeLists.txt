@@ -49,7 +49,7 @@ set_target_properties(hyperion-webos PROPERTIES
 )
 target_include_directories(hyperion-webos PRIVATE fbs)
 target_link_libraries(hyperion-webos flatccrt pthread dl yuv ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
-target_compile_options(hyperion-webos PRIVATE -Wall -Wextra -Wpedantic -Werror)
+target_compile_options(hyperion-webos PRIVATE -Wextra -Wpedantic -Werror)
 set_property(TARGET hyperion-webos PROPERTY ENABLE_EXPORTS 1)
 
 add_executable(unicapture-test
