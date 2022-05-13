@@ -23,7 +23,7 @@ mkdir -p build/xbuild
 pushd ./build/xbuild
 
 cmake ../.. \
- -DBUILD_SHARED_LIBS=on \
+ -DBUILD_SHARED_LIBS=off \
  -DCMAKE_BUILD_TYPE=Release \
  -DFLATCC_TEST=off \
  -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE}
