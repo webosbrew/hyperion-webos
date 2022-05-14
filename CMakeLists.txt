@@ -41,15 +41,15 @@ add_executable(hyperion-webos
     src/hyperion_client.c
 )
 set_target_properties(hyperion-webos PROPERTIES
-    # BUILD_RPATH_USE_ORIGIN ON
-    # INSTALL_RPATH "$ORIGIN:$ORIGIN/lib"
-    # BUILD_RPATH "$ORIGIN:$ORIGIN/lib"
+    BUILD_RPATH_USE_ORIGIN ON
+    INSTALL_RPATH "$ORIGIN:$ORIGIN/lib"
+    BUILD_RPATH "$ORIGIN:$ORIGIN/lib"
     # TODO: use above options after upgrading to CMake 3.11
-    LINK_FLAGS "-Wl,-rpath,'$ORIGIN:$ORIGIN/lib' -Wl,-z,origin"
+    # LINK_FLAGS "-Wl,-rpath,'$ORIGIN:$ORIGIN/lib' -Wl,-z,origin"
 )
 target_include_directories(hyperion-webos PRIVATE fbs)
-target_link_libraries(hyperion-webos flatccrt pthread dl yuv ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
-target_compile_options(hyperion-webos PRIVATE -Wall -Wextra -Wpedantic -Werror)
+target_link_libraries(hyperion-webos flatccrt pthread dl yuv rt ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
+target_compile_options(hyperion-webos PRIVATE -Wextra -Wpedantic -Werror)
 set_property(TARGET hyperion-webos PROPERTY ENABLE_EXPORTS 1)
 
 add_executable(unicapture-test
@@ -64,7 +64,7 @@ set_target_properties(unicapture-test PROPERTIES
     INSTALL_RPATH "$ORIGIN:$ORIGIN/lib"
     BUILD_RPATH "$ORIGIN:$ORIGIN/lib"
 )
-target_link_libraries(unicapture-test pthread dl yuv ${PMLOG_LDFLAGS})
+target_link_libraries(unicapture-test pthread dl yuv rt ${PMLOG_LDFLAGS})
 set_property(TARGET unicapture-test PROPERTY ENABLE_EXPORTS 1)
 
 # "Unified" v2 Backends

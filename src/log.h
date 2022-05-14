@@ -6,6 +6,7 @@
 extern "C" {
 #endif
 
+// Shorthand for PmLogLevel: https://github.com/openwebos/pmloglib/blob/master/include/public/PmLogLib.h.in#L163
 typedef enum {
     Error = 3,
     Warning = 4,
