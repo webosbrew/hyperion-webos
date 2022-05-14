@@ -64,9 +64,10 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     DILE_VT_DUMP_LOCATION_TYPE_T dump_location = DILE_VT_DISPLAY_OUTPUT;
 
     if (DILE_VT_SetVideoFrameOutputDeviceDumpLocation(vth, dump_location) != 0) {
-        WARN("DISPLAY dump location failed, attempting SCALER...");
+        WARN("[DILE_VT] DISPLAY dump location failed, attempting SCALER...");
         dump_location = DILE_VT_SCALER_OUTPUT;
         if (DILE_VT_SetVideoFrameOutputDeviceDumpLocation(vth, dump_location) != 0) {
+            ERR("[DILE_VT] SetVideoFrameOutputDeviceDumpLocation failed!");
             ret = -2;
             goto err_destroy;
         }
@@ -79,6 +80,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     }
 
     if (DILE_VT_SetVideoFrameOutputDeviceOutputRegion(vth, dump_location, &region) != 0) {
+        ERR("[DILE_VT] SetVideoFrameOutputDeviceOutputRegion failed!");
         ret = -3;
         goto err_destroy;
     }
@@ -104,6 +106,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 
     // Set framerate divider
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FRAMERATE_DIVIDE, &this->output_state) != 0) {
+        ERR("[DILE_VT] SetVideoFrameOutputDeviceState FRAMERATE_DIVIDE failed!");
         ret = -4;
         goto err_destroy;
     }
@@ -118,12 +121,14 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 
     // Set freeze
     if (DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &this->output_state) != 0) {
+        ERR("[DILE_VT] SetVideoFrameOutputDeviceState FREEZE failed!");
         ret = -5;
         goto err_destroy;
     }
 
     // Prepare offsets table (needs to be ptr[vfbcap.numVfs][vbcap.numPlanes])
     if (DILE_VT_GetVideoFrameBufferCapability(vth, &this->vfbcap) != 0) {
+        ERR("[DILE_VT] GetVideoFrameBufferCapability FREEZE failed!");
         ret = -9;
         goto err_destroy;
     }
@@ -137,6 +142,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     this->vfbprop.ptr = ptr;
 
     if (DILE_VT_GetAllVideoFrameBufferProperty(vth, &this->vfbcap, &this->vfbprop) != 0) {
+        ERR("[DILE_VT] GetAllVideoFrameBufferProperty failed!");
         ret = -10;
         goto err_destroy;
     }
@@ -144,6 +150,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     // TODO: check out if /dev/gfx is something we should rather use
     this->mem_fd = open("/dev/mem", O_RDWR | O_SYNC);
     if (this->mem_fd == -1) {
+        ERR("[DILE_VT] Creating handle to /dev/mem failed!");
         ret = -6;
         goto err_destroy;
     }
@@ -156,6 +163,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
             DBG("[DILE_VT] vfb[%d][%d] = 0x%08x", vfb, plane, this->vfbprop.ptr[vfb][plane]);
             this->vfbs[vfb][plane] = (uint8_t*)mmap(0, this->vfbprop.stride * this->vfbprop.height, PROT_READ, MAP_SHARED, this->mem_fd, this->vfbprop.ptr[vfb][plane]);
             if (this->vfbs[vfb][plane] == MAP_FAILED) {
+                ERR("[DILE_VT] mmap for vfb[%d][%d] failed!", vfb, plane);
                 ret = -7;
                 goto err_mmap;
             }
@@ -231,6 +239,7 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
         frame->planes[1].buffer = this->vfbs[idx][1];
         frame->planes[1].stride = this->vfbprop.stride;
     } else {
+        ERR("[DILE_VT] Unhandled pixelformat: 0x%x!", this->vfbprop.pixelFormat);
         return -1;
     }
 
