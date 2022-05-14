@@ -55,7 +55,7 @@ int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* bac
         backend->name = strdup(name);
         DBG("%s: success", name);
     } else {
-        ERR("%s: init failure: %d", ret, name);
+        ERR("%s: init failure, code: %d", name, ret);
     }
 
     return ret;
@@ -70,7 +70,7 @@ int unicapture_try_backends(cap_backend_config_t* config, capture_backend_t* bac
             DBG("try_backends: %s succeeded", candidates[i]);
             return 0;
         } else {
-            WARN("try_backends: backend: %s failed with code %d", candidates[i], ret);
+            WARN("try_backends: backend: %s failed with code: %d", candidates[i], ret);
         }
     }
 
