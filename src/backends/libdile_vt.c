@@ -128,7 +128,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 
     // Prepare offsets table (needs to be ptr[vfbcap.numVfs][vbcap.numPlanes])
     if (DILE_VT_GetVideoFrameBufferCapability(vth, &this->vfbcap) != 0) {
-        ERR("[DILE_VT] GetVideoFrameBufferCapability FREEZE failed!");
+        ERR("[DILE_VT] GetVideoFrameBufferCapability failed!");
         ret = -9;
         goto err_destroy;
     }
