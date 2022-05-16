@@ -25,14 +25,12 @@ static struct option long_options[] = {
     { "fps", required_argument, 0, 'f' },
     { "no-video", no_argument, 0, 'V' },
     { "no-gui", no_argument, 0, 'G' },
-    { "no-service", no_argument, 0, 'S' },
     { "no-vsync", no_argument, 0, 'n' },
     { "backend", required_argument, 0, 'b' },
     { "ui-backend", required_argument, 0, 'u' },
     { "help", no_argument, 0, 'h' },
     { "verbose", no_argument, 0, 'v' },
     { "config", required_argument, 0, 'c' },
-    { "save-conf", required_argument, 0, 's' },
     { "dump-frames", no_argument, 0, 'd' },
     { 0, 0, 0, 0 },
 };
@@ -44,7 +42,6 @@ static void print_usage()
     printf("Grab screen content continously and send to Hyperion via flatbuffers server.\n");
     printf("Application has to be named to hyperion-webos to avoid bugs!\n");
     printf("\n");
-    printf("  -S, --no-service      Run this from CLI and not as webOS-Service\n");
     printf("  -x, --width=WIDTH     Width of video frame (default 192)\n");
     printf("  -y, --height=HEIGHT   Height of video frame (default 108)\n");
     printf("  -a, --address=ADDR    IP address of Hyperion server\n");
@@ -56,7 +53,6 @@ static void print_usage()
     printf("  -G, --no-gui          GUI/UI will not be captured\n");
     printf("  -n, --no-vsync        Disable vsync (may increase framerate at the cost of tearing/artifacts)\n");
     printf("  -c, --config=PATH     Absolute path for configfile to load settings. Giving additional runtime arguments will overwrite loaded ones.\n");
-    printf("  -s, --save-conf=PATH  Saving configfile to given path.\n");
     printf("  -d, --dump-frames     Dump raw video frames to /tmp/.\n");
 }
 
@@ -65,7 +61,7 @@ static int parse_options(int argc, char* argv[])
     int opt, longindex;
     int ret;
 
-    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:c:s:vnhdSVG", long_options, &longindex)) != -1) {
+    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:c:vnhdVG", long_options, &longindex)) != -1) {
         switch (opt) {
         case 'x':
             settings.width = atoi(optarg);
@@ -89,10 +85,6 @@ static int parse_options(int argc, char* argv[])
         case 'G':
             settings.no_gui = 1;
             break;
-        case 'S':
-            // ???
-            // settings.no_service = 1;
-            break;
         case 'n':
             settings.vsync = false;
             break;
@@ -112,10 +104,6 @@ static int parse_options(int argc, char* argv[])
             if ((ret = settings_load_file(&settings, optarg)) != 0) {
                 WARN("Config load failed: %d", ret);
             }
-            break;
-        case 's':
-            // settings.save_settings = 1;
-            // _settingspath = strdup(optarg);
             break;
         case 'h':
             print_usage();
