@@ -18,6 +18,8 @@ void settings_init(settings_t* settings)
     settings->no_gui = false;
     settings->autostart = false;
     settings->vsync = true;
+
+    settings->dump_frames = false;
 }
 
 int settings_load_json(settings_t* settings, jvalue_ref source)

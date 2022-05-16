@@ -33,6 +33,7 @@ static struct option long_options[] = {
     { "verbose", no_argument, 0, 'v' },
     { "config", required_argument, 0, 'c' },
     { "save-conf", required_argument, 0, 's' },
+    { "dump-frames", no_argument, 0, 'd' },
     { 0, 0, 0, 0 },
 };
 
@@ -56,6 +57,7 @@ static void print_usage()
     printf("  -n, --no-vsync        Disable vsync (may increase framerate at the cost of tearing/artifacts)\n");
     printf("  -c, --config=PATH     Absolute path for configfile to load settings. Giving additional runtime arguments will overwrite loaded ones.\n");
     printf("  -s, --save-conf=PATH  Saving configfile to given path.\n");
+    printf("  -d, --dump-frames     Dump raw video frames to /tmp/.\n");
 }
 
 static int parse_options(int argc, char* argv[])
@@ -63,7 +65,7 @@ static int parse_options(int argc, char* argv[])
     int opt, longindex;
     int ret;
 
-    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:c:s:vnhSVG", long_options, &longindex)) != -1) {
+    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:c:s:vnhdSVG", long_options, &longindex)) != -1) {
         switch (opt) {
         case 'x':
             settings.width = atoi(optarg);

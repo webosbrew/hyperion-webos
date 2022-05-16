@@ -250,7 +250,7 @@ void* unicapture_run(void* data)
 
         uint64_t frame_processed = getticks_us();
 
-        if (got_frame && framecounter % 30 == 0) {
+        if (this->dump_frames && got_frame && framecounter % 30 == 0) {
             char filename[256];
             snprintf(filename, sizeof(filename), "/tmp/hyperion-webos-dump.%03d.data", (int)(framecounter / 30) % 10);
             FILE* fd = fopen(filename, "wb");
