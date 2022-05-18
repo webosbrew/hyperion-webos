@@ -67,6 +67,7 @@ int service_init(service_t* service, settings_t* settings)
     service->unicapture.fps = settings->fps;
     service->unicapture.callback = &service_feed_frame;
     service->unicapture.callback_data = (void*)service;
+    service->unicapture.dump_frames = settings->dump_frames;
 
     char* ui_backends[] = { "libgm_backend.so", "libhalgal_backend.so", NULL };
     char* video_backends[] = { "libvtcapture_backend.so", "libdile_vt_backend.so", NULL };

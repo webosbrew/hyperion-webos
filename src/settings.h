@@ -24,6 +24,8 @@ typedef struct _settings_t {
     bool no_gui;
 
     bool autostart;
+
+    bool dump_frames;
 } settings_t;
 
 void settings_init(settings_t*);

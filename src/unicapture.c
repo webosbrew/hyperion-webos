@@ -250,7 +250,7 @@ void* unicapture_run(void* data)
 
         uint64_t frame_processed = getticks_us();
 
-        if (got_frame && framecounter % 30 == 0) {
+        if (this->dump_frames && got_frame && framecounter % 30 == 0) {
             char filename[256];
             snprintf(filename, sizeof(filename), "/tmp/hyperion-webos-dump.%03d.data", (int)(framecounter / 30) % 10);
             FILE* fd = fopen(filename, "wb");
@@ -281,13 +281,13 @@ void* unicapture_run(void* data)
             if (framecounter % 60 == 0) {
                 double fps = (60 * 1000000.0) / (getticks_us() - framecounter_start);
                 this->metrics.framerate = fps;
-                INFO("Framerate: %.6f FPS; timings - wait: %lldus, acquire: %lldus, convert: %lldus, process; %lldus, send: %lldus, release: %lldus",
+                DBG("Framerate: %.6f FPS; timings - wait: %lldus, acquire: %lldus, convert: %lldus, process; %lldus, send: %lldus, release: %lldus",
                     fps, frame_wait - frame_start, frame_acquired - frame_wait, frame_converted - frame_acquired, frame_processed - frame_converted, frame_sent - frame_processed, frame_released - frame_sent);
 
-                INFO("        UI: pixfmt: %d; %dx%d", ui_frame.pixel_format, ui_frame.width, ui_frame.height);
-                INFO("     VIDEO: pixfmt: %d; %dx%d", video_frame.pixel_format, video_frame.width, video_frame.height);
-                INFO("CONV    UI: pixfmt: %d; %dx%d", ui_frame_converted.pixel_format, ui_frame_converted.width, ui_frame_converted.height);
-                INFO("CONV VIDEO: pixfmt: %d; %dx%d", video_frame_converted.pixel_format, video_frame_converted.width, video_frame_converted.height);
+                DBG("        UI: pixfmt: %d; %dx%d", ui_frame.pixel_format, ui_frame.width, ui_frame.height);
+                DBG("     VIDEO: pixfmt: %d; %dx%d", video_frame.pixel_format, video_frame.width, video_frame.height);
+                DBG("CONV    UI: pixfmt: %d; %dx%d", ui_frame_converted.pixel_format, ui_frame_converted.width, ui_frame_converted.height);
+                DBG("CONV VIDEO: pixfmt: %d; %dx%d", video_frame_converted.pixel_format, video_frame_converted.width, video_frame_converted.height);
 
                 framecounter_start = getticks_us();
             }
