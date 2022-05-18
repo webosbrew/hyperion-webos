@@ -188,11 +188,6 @@ bool service_method_stop(LSHandle* sh, LSMessage* msg, void* data)
     return false;
 }
 
-bool service_method_restart(LSHandle* sh __attribute__((unused)), LSMessage* msg __attribute__((unused)), void* data __attribute__((unused)))
-{
-    return false;
-}
-
 bool service_method_status(LSHandle* sh, LSMessage* msg, void* data)
 {
     service_t* service = (service_t*)data;
@@ -285,21 +280,12 @@ bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
     return true;
 }
 
-bool service_method_reset_settings(LSHandle* sh __attribute__((unused)), LSMessage* msg __attribute__((unused)), void* data __attribute__((unused)))
-{
-    return false;
-}
-
 LSMethod methods[] = {
     { "start", service_method_start, LUNA_METHOD_FLAGS_NONE },
     { "stop", service_method_stop, LUNA_METHOD_FLAGS_NONE },
-    // DEPRECATED
-    { "isRunning", service_method_status, LUNA_METHOD_FLAGS_NONE },
     { "status", service_method_status, LUNA_METHOD_FLAGS_NONE },
     { "getSettings", service_method_get_settings, LUNA_METHOD_FLAGS_NONE },
-    { "setSettings", service_method_set_settings, LUNA_METHOD_FLAGS_NONE },
-    { "resetSettings", service_method_reset_settings, LUNA_METHOD_FLAGS_NONE },
-    { "restart", service_method_restart, LUNA_METHOD_FLAGS_NONE }
+    { "setSettings", service_method_set_settings, LUNA_METHOD_FLAGS_NONE }
 };
 
 static bool power_callback(LSHandle* sh __attribute__((unused)), LSMessage* msg, void* data)
