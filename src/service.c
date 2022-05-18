@@ -193,23 +193,6 @@ bool service_method_restart(LSHandle* sh __attribute__((unused)), LSMessage* msg
     return false;
 }
 
-bool service_method_is_root(LSHandle* sh, LSMessage* msg, void* data __attribute__((unused)))
-{
-    LSError lserror;
-    LSErrorInit(&lserror);
-
-    jvalue_ref jobj = jobject_create();
-
-    jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(true));
-    jobject_set(jobj, j_cstr_to_buffer("rootStatus"), jboolean_create(getuid() == 0));
-
-    LSMessageReply(sh, msg, jvalue_tostring_simple(jobj), &lserror);
-
-    j_release(&jobj);
-
-    return true;
-}
-
 bool service_method_status(LSHandle* sh, LSMessage* msg, void* data)
 {
     service_t* service = (service_t*)data;
@@ -218,6 +201,7 @@ bool service_method_status(LSHandle* sh, LSMessage* msg, void* data)
     LSErrorInit(&lserror);
 
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(true));
+    jobject_set(jobj, j_cstr_to_buffer("elevated"), jboolean_create(getuid() == 0));
     jobject_set(jobj, j_cstr_to_buffer("isRunning"), jboolean_create(service->running));
     jobject_set(jobj, j_cstr_to_buffer("connected"), jboolean_create(service->connected));
     jobject_set(jobj, j_cstr_to_buffer("videoBackend"), service->video_backend.name ? jstring_create(service->video_backend.name) : jnull());
@@ -309,7 +293,6 @@ bool service_method_reset_settings(LSHandle* sh __attribute__((unused)), LSMessa
 LSMethod methods[] = {
     { "start", service_method_start, LUNA_METHOD_FLAGS_NONE },
     { "stop", service_method_stop, LUNA_METHOD_FLAGS_NONE },
-    { "isRoot", service_method_is_root, LUNA_METHOD_FLAGS_NONE },
     // DEPRECATED
     { "isRunning", service_method_status, LUNA_METHOD_FLAGS_NONE },
     { "status", service_method_status, LUNA_METHOD_FLAGS_NONE },
