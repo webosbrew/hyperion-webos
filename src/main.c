@@ -141,7 +141,7 @@ int main(int argc, char* argv[])
     int ret;
 
     log_init();
-    INFO("Starting up...");
+    INFO("Starting up (version: %s)...", HYPERION_WEBOS_VERSION);
 
     using_cli = !getenv("LS_SERVICE_NAMES");
 
