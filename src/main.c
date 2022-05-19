@@ -88,6 +88,9 @@ static int parse_options(int argc, char* argv[])
         case 'n':
             settings.vsync = false;
             break;
+        case 'd':
+            settings.dump_frames = true;
+            break;
         case 'v':
             log_set_level(Debug);
             break;
