@@ -4,12 +4,14 @@
 #include "log.h"
 #include "service.h"
 #include "settings.h"
+#include "version.h"
 
 GMainLoop* loop;
 
 settings_t settings;
 service_t service;
 bool using_cli = false;
+int print_version = 0;
 
 void int_handler(int signum __attribute__((unused)))
 {
@@ -30,6 +32,7 @@ static struct option long_options[] = {
     { "ui-backend", required_argument, 0, 'u' },
     { "help", no_argument, 0, 'h' },
     { "verbose", no_argument, 0, 'v' },
+    { "version", no_argument, &print_version, 1 },
     { "config", required_argument, 0, 'c' },
     { "dump-frames", no_argument, 0, 'd' },
     { 0, 0, 0, 0 },
@@ -54,6 +57,10 @@ static void print_usage()
     printf("  -n, --no-vsync        Disable vsync (may increase framerate at the cost of tearing/artifacts)\n");
     printf("  -c, --config=PATH     Absolute path for configfile to load settings. Giving additional runtime arguments will overwrite loaded ones.\n");
     printf("  -d, --dump-frames     Dump raw video frames to /tmp/.\n");
+    printf("\n");
+    printf("  -v, --verbose         Enable verbose logging.\n");
+    printf("  -h, --help            Print this list of arguments.\n");
+    printf("  --version             Print program version.\n");
 }
 
 static int parse_options(int argc, char* argv[])
@@ -111,6 +118,9 @@ static int parse_options(int argc, char* argv[])
         case 'h':
             print_usage();
             return 1;
+        case 0:
+            /* getopt_long() set a variable, just keep going */
+            break;
         default:
             WARN("Unknown option: %c", opt);
             print_usage();
@@ -119,6 +129,11 @@ static int parse_options(int argc, char* argv[])
     }
 
     return 0;
+}
+
+void print_version_string()
+{
+    fprintf(stderr, "%s\n", HYPERION_WEBOS_VERSION);
 }
 
 int main(int argc, char* argv[])
@@ -141,6 +156,11 @@ int main(int argc, char* argv[])
 
     if ((ret = parse_options(argc, argv)) != 0) {
         return ret;
+    }
+
+    if (print_version > 0) {
+        print_version_string();
+        return 0;
     }
 
     signal(SIGINT, int_handler);
