@@ -4,6 +4,7 @@
 #include "pthread.h"
 #include "settings.h"
 #include "unicapture.h"
+#include "version.h"
 #include <errno.h>
 #include <luna-service2/lunaservice.h>
 #include <stdio.h>
@@ -197,6 +198,7 @@ bool service_method_status(LSHandle* sh, LSMessage* msg, void* data)
 
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(true));
     jobject_set(jobj, j_cstr_to_buffer("elevated"), jboolean_create(getuid() == 0));
+    jobject_set(jobj, j_cstr_to_buffer("version"), jstring_create(HYPERION_WEBOS_VERSION));
     jobject_set(jobj, j_cstr_to_buffer("isRunning"), jboolean_create(service->running));
     jobject_set(jobj, j_cstr_to_buffer("connected"), jboolean_create(service->connected));
     jobject_set(jobj, j_cstr_to_buffer("videoBackend"), service->video_backend.name ? jstring_create(service->video_backend.name) : jnull());
