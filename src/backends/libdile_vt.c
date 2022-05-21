@@ -33,11 +33,11 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 
     INFO("Capture start called.");
 
-    if HAS_QUIRK(config->quirks, QUIRK_DILE_VT_CREATE_EX) {
+    if (HAS_QUIRK(config->quirks, QUIRK_DILE_VT_CREATE_EX)) {
         INFO("[QUIRK_DILE_VT_CREATE_EX]: Attempting DILE_VT_CreateEx...");
         vth = DILE_VT_CreateEx(0, 1);
     } else {
-        INFO("Attempting DILE_VT...");
+        INFO("Attempting DILE_VT_Create...");
         vth = DILE_VT_Create(0);
     }
 
