@@ -287,7 +287,8 @@ LSMethod methods[] = {
     { "stop", service_method_stop, LUNA_METHOD_FLAGS_NONE },
     { "status", service_method_status, LUNA_METHOD_FLAGS_NONE },
     { "getSettings", service_method_get_settings, LUNA_METHOD_FLAGS_NONE },
-    { "setSettings", service_method_set_settings, LUNA_METHOD_FLAGS_NONE }
+    { "setSettings", service_method_set_settings, LUNA_METHOD_FLAGS_NONE },
+    { 0, 0, 0 }
 };
 
 static bool power_callback(LSHandle* sh __attribute__((unused)), LSMessage* msg, void* data)
