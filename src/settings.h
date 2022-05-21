@@ -19,6 +19,7 @@ typedef struct _settings_t {
     int width;
     int height;
     bool vsync;
+    int quirks;
 
     bool no_video;
     bool no_gui;

@@ -60,6 +60,7 @@ int service_init(service_t* service, settings_t* settings)
     config.resolution_width = settings->width;
     config.resolution_height = settings->height;
     config.fps = settings->fps;
+    config.quirks = settings->quirks;
 
     service->settings = settings;
 

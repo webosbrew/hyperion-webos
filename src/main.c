@@ -30,6 +30,7 @@ static struct option long_options[] = {
     { "no-vsync", no_argument, 0, 'n' },
     { "backend", required_argument, 0, 'b' },
     { "ui-backend", required_argument, 0, 'u' },
+    { "quirks", required_argument, 0, 'q' },
     { "help", no_argument, 0, 'h' },
     { "verbose", no_argument, 0, 'v' },
     { "version", no_argument, &print_version, 1 },
@@ -55,6 +56,7 @@ static void print_usage()
     printf("  -V, --no-video        Video will not be captured\n");
     printf("  -G, --no-gui          GUI/UI will not be captured\n");
     printf("  -n, --no-vsync        Disable vsync (may increase framerate at the cost of tearing/artifacts)\n");
+    printf("  -q, --quirks=QUIRKS   Enable certain handling for per-device quirks\n");
     printf("  -c, --config=PATH     Absolute path for configfile to load settings. Giving additional runtime arguments will overwrite loaded ones.\n");
     printf("  -d, --dump-frames     Dump raw video frames to /tmp/.\n");
     printf("\n");
@@ -68,7 +70,7 @@ static int parse_options(int argc, char* argv[])
     int opt, longindex;
     int ret;
 
-    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:c:vnhdVG", long_options, &longindex)) != -1) {
+    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:q:c:vnhdVG", long_options, &longindex)) != -1) {
         switch (opt) {
         case 'x':
             settings.width = atoi(optarg);
@@ -108,6 +110,9 @@ static int parse_options(int argc, char* argv[])
         case 'u':
             free(settings.ui_backend);
             settings.ui_backend = strdup(optarg);
+            break;
+        case 'q':
+            settings.quirks = atoi(optarg);
             break;
         case 'c':
             DBG("Loading config file %s...", optarg);
