@@ -38,7 +38,7 @@ add_custom_target(version
                    -P ${CMAKE_SOURCE_DIR}/GenerateVersionHeader.cmake
 )
 
-add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+add_compile_options(-Wall -Wextra -Wpedantic -Werror -DSECURITY_COMPATIBILITY)
 add_executable(hyperion-webos
     src/main.c
     src/settings.c

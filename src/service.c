@@ -11,6 +11,16 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+// This is a deprecated symbol present in meta-lg-webos-ndk but missing in
+// latest buildroot NDK. It is required for proper public service registration
+// before webOS 3.5.
+//
+// SECURITY_COMPATIBILITY flag present in CMakeList disables deprecation notices, see:
+// https://github.com/webosose/luna-service2/blob/b74b1859372597fcd6f0f7d9dc3f300acbf6ed6c/include/public/luna-service2/lunaservice.h#L49-L53
+bool LSRegisterPubPriv(const char* name, LSHandle** sh,
+    bool public_bus,
+    LSError* lserror) __attribute__((weak));
+
 void* connection_loop(void* data)
 {
     service_t* service = (service_t*)data;
@@ -344,7 +354,17 @@ int service_register(service_t* service, GMainLoop* loop)
 
     LSErrorInit(&lserror);
 
-    if (!LSRegister(SERVICE_NAME, &handle, &lserror)) {
+    bool registered = false;
+
+    if (&LSRegisterPubPriv != 0) {
+        DBG("Using LSRegisterPubPriv");
+        registered = LSRegisterPubPriv(SERVICE_NAME, &handle, true, &lserror);
+    } else {
+        DBG("Using LSRegister");
+        registered = LSRegister(SERVICE_NAME, &handle, &lserror);
+    }
+
+    if (!registered) {
         ERR("Unable to register on Luna bus: %s", lserror.message);
         LSErrorFree(&lserror);
         return -1;
