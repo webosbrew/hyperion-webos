@@ -317,7 +317,7 @@ static bool power_callback(LSHandle* sh __attribute__((unused)), LSMessage* msg,
 
     raw_buffer state_buf = jstring_get(state_ref);
     const char* state_str = state_buf.m_str;
-    bool target_state = strcmp(state_str, "Active") == 0 && !jobject_containskey(parsed, j_cstr_to_buffer("processing"));
+    bool target_state = strcmp(state_str, "Active") == 0;
 
     if (!service->running && target_state && service->power_paused) {
         INFO("Resuming after power pause...");
