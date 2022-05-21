@@ -308,6 +308,12 @@ static bool power_callback(LSHandle* sh __attribute__((unused)), LSMessage* msg,
     }
 
     jvalue_ref state_ref = jobject_get(parsed, j_cstr_to_buffer("state"));
+    if (!jis_valid(state_ref)) {
+        DBG("power_callback: luna-reply does not contain 'state'");
+        j_release(&parsed);
+        return true;
+    }
+
     raw_buffer state_buf = jstring_get(state_ref);
     const char* state_str = state_buf.m_str;
     bool target_state = strcmp(state_str, "Active") == 0 && !jobject_containskey(parsed, j_cstr_to_buffer("processing"));
