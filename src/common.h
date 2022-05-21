@@ -17,6 +17,7 @@ typedef struct _cap_backend_config {
     int framedelay_us;
     int resolution_width;
     int resolution_height;
+    int quirks;
     bool no_video;
     bool no_gui;
     bool save_config;

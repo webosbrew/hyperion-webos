@@ -14,6 +14,7 @@
 
 #include "log.h"
 #include "unicapture.h"
+#include "quirks.h"
 #include "utils.h"
 
 typedef struct _dile_vt_backend_state {
@@ -32,11 +33,12 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 
     INFO("Capture start called.");
 
-    vth = DILE_VT_Create(0);
-
-    if (vth == NULL && &DILE_VT_CreateEx != 0) {
-        WARN("DILE_VT_Create failed, attempting DILE_VT_CreateEx...");
+    if (HAS_QUIRK(config->quirks, QUIRK_DILE_VT_CREATE_EX)) {
+        INFO("[QUIRK_DILE_VT_CREATE_EX]: Attempting DILE_VT_CreateEx...");
         vth = DILE_VT_CreateEx(0, 1);
+    } else {
+        INFO("Attempting DILE_VT_Create...");
+        vth = DILE_VT_Create(0);
     }
 
     if (vth == NULL) {
