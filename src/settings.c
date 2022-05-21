@@ -85,7 +85,7 @@ int settings_save_json(settings_t* settings, jvalue_ref target)
     jobject_set(target, j_cstr_to_buffer("fps"), jnumber_create_i32(settings->fps));
     jobject_set(target, j_cstr_to_buffer("width"), jnumber_create_i32(settings->width));
     jobject_set(target, j_cstr_to_buffer("height"), jnumber_create_i32(settings->height));
-    jobject_set(target, j_cstr_to_buffer("quirks"), jnumber_create_i32(settings->height));
+    jobject_set(target, j_cstr_to_buffer("quirks"), jnumber_create_i32(settings->quirks));
 
     jobject_set(target, j_cstr_to_buffer("vsync"), jboolean_create(settings->vsync));
     jobject_set(target, j_cstr_to_buffer("novideo"), jboolean_create(settings->no_video));
