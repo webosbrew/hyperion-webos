@@ -54,24 +54,24 @@ VT_REGION_T activeregion;
 _LibVtCaptureBufferInfo buff;
 char *addr0, *addr1;
 int size0, size1;
-char* videoY;
-char* videoUV;
-char* videoARGB;
-char* guiABGR;
-char* guiARGB;
-char* outARGB;
-char* outRGB;
+uint8_t* videoY;
+uint8_t* videoUV;
+uint8_t* videoARGB;
+uint8_t* guiABGR;
+uint8_t* guiARGB;
+uint8_t* outARGB;
+uint8_t* outRGB;
 
 // All
 int stride, x, y, w, h, xa, ya, wa, ha;
 
 size_t len;
-char* addr;
+uint8_t* addr;
 int fd;
 
 VT_RESOLUTION_T resolution = { 360, 180 };
 
-cap_backend_config_t config = { 0, 0, 0, 0 };
+cap_backend_config_t config = { 0 };
 cap_imagedata_callback_t imagedata_cb = NULL;
 
 // Prototypes
@@ -177,12 +177,12 @@ int capture_init()
             stride = surfaceInfo.pitch / 4;
             rgbsize = sizeof(char) * stride * h * 3;
 
-            guiABGR = (char*)malloc(len);
-            guiARGB = (char*)malloc(len);
-            outARGB = (char*)malloc(len);
-            outRGB = (char*)malloc(len);
+            guiABGR = (uint8_t*)malloc(len);
+            guiARGB = (uint8_t*)malloc(len);
+            outARGB = (uint8_t*)malloc(len);
+            outRGB = (uint8_t*)malloc(len);
 
-            addr = (char*)mmap(0, len, 3, 1, fd, surfaceInfo.offset);
+            addr = (uint8_t*)mmap(0, len, 3, 1, fd, surfaceInfo.offset);
 
             halitsmalloc = 1;
             DBG("Malloc halgal vars finished.");
@@ -221,14 +221,14 @@ int capture_init()
                 ERR("Vars already malloc! Returning! HAL: %d VT: %d", vtitsmalloc);
                 return -1;
             }
-            videoY = (char*)malloc(size0);
-            videoUV = (char*)malloc(size1);
+            videoY = (uint8_t*)malloc(size0);
+            videoUV = (uint8_t*)malloc(size1);
 
-            rgbasize = sizeof(char) * stride * h * 4;
+            rgbasize = sizeof(uint8_t) * stride * h * 4;
             rgbsize = sizeof(char) * stride * h * 3;
 
-            videoARGB = (char*)malloc(rgbasize);
-            outRGB = (char*)malloc(rgbsize);
+            videoARGB = (uint8_t*)malloc(rgbasize);
+            outRGB = (uint8_t*)malloc(rgbsize);
 
             vtitsmalloc = 1;
             DBG("Malloc vt vars finished.");
@@ -243,21 +243,21 @@ int capture_init()
             return -1;
         }
 
-        videoY = (char*)malloc(size0);
-        videoUV = (char*)malloc(size1);
+        videoY = (uint8_t*)malloc(size0);
+        videoUV = (uint8_t*)malloc(size1);
 
         rgbasize = sizeof(char) * stride * h * 4;
         rgbsize = sizeof(char) * stride * h * 3;
 
-        videoARGB = (char*)malloc(rgbasize);
-        guiABGR = (char*)malloc(len);
-        guiARGB = (char*)malloc(len);
-        outARGB = (char*)malloc(len);
-        outRGB = (char*)malloc(len);
+        videoARGB = (uint8_t*)malloc(rgbasize);
+        guiABGR = (uint8_t*)malloc(len);
+        guiARGB = (uint8_t*)malloc(len);
+        outARGB = (uint8_t*)malloc(len);
+        outRGB = (uint8_t*)malloc(len);
 
         stride = surfaceInfo.pitch / 4;
 
-        addr = (char*)mmap(0, len, 3, 1, fd, surfaceInfo.offset);
+        addr = (uint8_t*)mmap(0, len, 3, 1, fd, surfaceInfo.offset);
 
         halitsmalloc = 1;
         vtitsmalloc = 1;
@@ -446,7 +446,7 @@ int capture_stop_vt()
 
 int capture_terminate()
 {
-    int done;
+    int done = 0;
 
     INFO("Called termination of vtcapture");
 
@@ -504,9 +504,8 @@ void capture_frame()
     }
     pthread_mutex_lock(&frame_mutex);
     static uint32_t framecount = 0;
-    static uint64_t last_ticks = 0, fps_ticks = 0;
+    static uint64_t fps_ticks = 0;
     uint64_t ticks = getticks_us();
-    last_ticks = ticks;
 
     if (config.no_video != 1 && vtcapture_initialized) {
         memcpy(videoY, addr0, size0);
@@ -593,9 +592,11 @@ void send_picture()
     }
 }
 
-void* capture_thread_target(void* data)
+void* capture_thread_target(void *data __attribute__((unused)))
 {
     while (capture_run) {
         capture_frame();
     }
+
+    return NULL;
 }

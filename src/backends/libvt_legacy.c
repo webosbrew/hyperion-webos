@@ -33,7 +33,7 @@ GLubyte *pixels_rgba = NULL, *pixels_rgb = NULL;
 bool capture_initialized = false;
 bool vt_available = false;
 
-cap_backend_config_t config = { 0, 0, 0, 0 };
+cap_backend_config_t config = { 0 };
 cap_imagedata_callback_t imagedata_cb = NULL;
 VT_RESOLUTION_T resolution = { 192, 108 };
 
@@ -251,7 +251,7 @@ void capture_frame()
     static uint32_t framecount = 0;
     static uint64_t last_ticks = 0, fps_ticks = 0, dur_gentexture = 0, dur_readframe = 0, dur_sendframe = 0;
     uint64_t ticks = getticks_us(), trace_start, trace_end;
-    if (ticks - last_ticks < config.framedelay_us) {
+    if (ticks - last_ticks < (uint64_t)config.framedelay_us) {
         pthread_mutex_unlock(&frame_mutex);
         return;
     }
@@ -297,7 +297,7 @@ void capture_frame()
     pthread_mutex_unlock(&frame_mutex);
 }
 
-void capture_onevent(VT_EVENT_TYPE_T type, void* data, void* user_data)
+void capture_onevent(VT_EVENT_TYPE_T type, void* data __attribute__((unused)), void* user_data __attribute__((unused)))
 {
     switch (type) {
     case VT_AVAILABLE:

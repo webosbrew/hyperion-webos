@@ -15,11 +15,11 @@
 #include "common.h"
 #include "log.h"
 
-cap_backend_config_t config = { 0, 0, 0, 0 };
+cap_backend_config_t config = { 0 };
 cap_imagedata_callback_t imagedata_cb = NULL;
 
-pthread_t capture_thread = NULL;
-pthread_t vsync_thread = NULL;
+pthread_t capture_thread = (pthread_t) NULL;
+pthread_t vsync_thread = (pthread_t) NULL;
 
 pthread_mutex_t vsync_lock;
 pthread_cond_t vsync_cond;
@@ -70,11 +70,11 @@ int capture_terminate()
 
     capture_running = false;
 
-    if (capture_thread != NULL) {
+    if (capture_thread != (pthread_t) NULL) {
         pthread_join(capture_thread, NULL);
     }
 
-    if (use_vsync_thread && vsync_thread != NULL) {
+    if (use_vsync_thread && vsync_thread != (pthread_t) NULL) {
         pthread_join(vsync_thread, NULL);
     }
 
@@ -181,7 +181,7 @@ int capture_start()
 
     INFO("[DILE_VT] vfbs: %d; planes: %d", vfbcap.numVfbs, vfbcap.numPlanes);
     uint32_t** ptr = calloc(sizeof(uint32_t*), vfbcap.numVfbs);
-    for (int vfb = 0; vfb < vfbcap.numVfbs; vfb++) {
+    for (int vfb = 0; vfb < (int)vfbcap.numVfbs; vfb++) {
         ptr[vfb] = calloc(sizeof(uint32_t), vfbcap.numPlanes);
     }
 
@@ -199,9 +199,9 @@ int capture_start()
 
     INFO("[DILE_VT] pixelFormat: %d; width: %d; height: %d; stride: %d...", vfbprop.pixelFormat, vfbprop.width, vfbprop.height, vfbprop.stride);
     vfbs = calloc(vfbcap.numVfbs, sizeof(uint8_t**));
-    for (int vfb = 0; vfb < vfbcap.numVfbs; vfb++) {
+    for (int vfb = 0; vfb < (int)vfbcap.numVfbs; vfb++) {
         vfbs[vfb] = calloc(vfbcap.numPlanes, sizeof(uint8_t*));
-        for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
+        for (int plane = 0; plane < (int)vfbcap.numPlanes; plane++) {
             DBG("[DILE_VT] vfb[%d][%d] = 0x%08x", vfb, plane, vfbprop.ptr[vfb][plane]);
             vfbs[vfb][plane] = (uint8_t*)mmap(0, vfbprop.stride * vfbprop.height, PROT_READ, MAP_SHARED, mem_fd, vfbprop.ptr[vfb][plane]);
         }
@@ -306,7 +306,7 @@ void capture_frame()
         ARGBToRGB24(argbvideo, 4 * width, outbuf, 3 * width, width, height);
     } else {
         ERR("[DILE_VT] Unsupported pixel format: %d", vfbprop.pixelFormat);
-        for (int plane = 0; plane < vfbcap.numPlanes; plane++) {
+        for (int plane = 0; plane < (int)vfbcap.numPlanes; plane++) {
             dump_buffer(vfbs[idx][plane], vfbprop.stride * vfbprop.height, idx, plane);
         }
         return;
@@ -325,15 +325,17 @@ void capture_frame()
     DILE_VT_SetVideoFrameOutputDeviceState(vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &output_state);
 }
 
-void* capture_thread_target(void* data)
+void* capture_thread_target(void* data __attribute__((unused)))
 {
     INFO("capture_thread_target called.");
     while (capture_running) {
         capture_frame();
     }
+
+    return NULL;
 }
 
-void* vsync_thread_target(void* data)
+void* vsync_thread_target(void* data __attribute__((unused)))
 {
     INFO("vsync_thread_target called.");
     while (capture_running) {
@@ -342,4 +344,6 @@ void* vsync_thread_target(void* data)
         pthread_cond_signal(&vsync_cond);
         pthread_mutex_unlock(&vsync_lock);
     }
+
+    return NULL;
 }
