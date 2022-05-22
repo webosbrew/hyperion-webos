@@ -1,19 +1,25 @@
+#include <unistd.h>
 #include "log.h"
 #include "unicapture.h"
 
-int main(int argc, char** argv)
+int main()
 {
     log_init();
     INFO("Hello world!");
 
-    cap_backend_config_t config = { 30, 0, 240, 135 }; // 1920 / 5, 1080 / 5};
-    capture_backend_t ui_capture;
-    capture_backend_t video_capture;
+    cap_backend_config_t config = { 0 };
+    capture_backend_t ui_capture = { 0 };
+    capture_backend_t video_capture = { 0 };
+
+    config.fps = 30;
+    config.framedelay_us = 0;
+    config.resolution_width = 240; // 1920 / 5
+    config.resolution_height = 135; // 1080 / 5
 
     char* ui_backends[] = { "libgm_backend.so", "libhalgal_backend.so", NULL };
     char* video_backends[] = { "libvtcapture_backend.so", "libdile_vt_backend.so", NULL };
 
-    unicapture_state_t up;
+    unicapture_state_t up = { 0 };
     unicapture_init(&up);
 
     if (unicapture_try_backends(&config, &ui_capture, ui_backends) == 0) {
