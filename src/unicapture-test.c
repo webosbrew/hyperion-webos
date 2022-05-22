@@ -20,6 +20,7 @@ int main()
     char* video_backends[] = { "libvtcapture_backend.so", "libdile_vt_backend.so", NULL };
 
     unicapture_state_t up = { 0 };
+    up.dump_frames = true;
     unicapture_init(&up);
 
     if (unicapture_try_backends(&config, &ui_capture, ui_backends) == 0) {
