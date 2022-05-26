@@ -11,6 +11,10 @@ env:
 
 jobs:
   build-native-component:
+    strategy:
+      matrix:
+        build-type: [Debug, Release]
+
     runs-on: ubuntu-latest
 
     steps:
@@ -39,7 +43,7 @@ jobs:
     - name: Build component
       working-directory: ${{github.workspace}}/build
       shell: bash
-      run: cmake -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE .. && make hyperion-webos gm_backend halgal_backend dile_vt_backend vtcapture_backend
+      run: cmake -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE .. && make hyperion-webos gm_backend halgal_backend dile_vt_backend vtcapture_backend
 
     - name: List files
       run: find .
@@ -47,7 +51,7 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
-        name: hyperion_webos
+        name: hyperion_webos_${{ matrix.build-type }}
         path: |
           ${{github.workspace}}/build/hyperion-webos
           ${{github.workspace}}/build/*.so
