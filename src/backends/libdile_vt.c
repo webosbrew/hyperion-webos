@@ -24,6 +24,7 @@ typedef struct _dile_vt_backend_state {
     DILE_VT_FRAMEBUFFER_CAPABILITY vfbcap;
     uint8_t*** vfbs;
     int mem_fd;
+    bool no_freeze_to_acquire_frame;
 } dile_vt_backend_state_t;
 
 int capture_init(cap_backend_config_t* config, void** state_p)
@@ -176,6 +177,11 @@ int capture_init(cap_backend_config_t* config, void** state_p)
         }
     }
 
+    if (HAS_QUIRK(config->quirks, QUIRK_DILE_VT_NO_FREEZE_CAPTURE)) {
+        INFO("[QUIRK_DILE_VT_NO_FREEZE_CAPTURE]: Won't freeze for acquiring frames");
+        this->no_freeze_to_acquire_frame = true;
+    }
+
     return 0;
 
 err_mmap:
@@ -218,8 +224,10 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
 
     uint32_t idx = 0;
 
-    this->output_state.freezed = 1;
-    DILE_VT_SetVideoFrameOutputDeviceState(this->vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &this->output_state);
+    if (!this->no_freeze_to_acquire_frame) {
+        this->output_state.freezed = 1;
+        DILE_VT_SetVideoFrameOutputDeviceState(this->vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &this->output_state);
+    }
 
     DILE_VT_GetCurrentVideoFrameBufferProperty(this->vth, NULL, &idx);
 
@@ -255,8 +263,11 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
 int capture_release_frame(void* state, frame_info_t* frame __attribute__((unused)))
 {
     dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
-    this->output_state.freezed = 0;
-    DILE_VT_SetVideoFrameOutputDeviceState(this->vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &this->output_state);
+    if (!this->no_freeze_to_acquire_frame) {
+        this->output_state.freezed = 0;
+        DILE_VT_SetVideoFrameOutputDeviceState(this->vth, DILE_VT_VIDEO_FRAME_OUTPUT_DEVICE_STATE_FREEZED, &this->output_state);
+    }
+
     return 0;
 }
 
