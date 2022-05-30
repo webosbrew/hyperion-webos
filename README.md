@@ -38,7 +38,7 @@ the TV, eg. into `/tmp` directory.
 ```sh
 cd /tmp
 ./hyperion-webos --help
-./hyperion-webos -S -b libdile_vt -a 10.0.0.1
+./hyperion-webos -b libdile_vt -a 10.0.0.1
 ```
 
 ## Issues reporting
