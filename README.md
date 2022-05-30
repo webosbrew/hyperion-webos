@@ -14,7 +14,6 @@ Based on reverse-engineered internal system APIs. Still highly experimental.
 If you are looking for a user-friendly UI that ships this piece of software check [PicCap](https://github.com/TBSniller/piccap). This application mainly is the underlaying service for this software.
 
 ## Known issues
-* `libvt`: may cause flickering or "No Signal" until reboot
 * Everything is based on highly platform-specific reverse-engineered internal
   system APIs. Standard no-warranty clauses apply.
 
@@ -22,13 +21,24 @@ If you are looking for a user-friendly UI that ships this piece of software chec
 This software uses multiple capture backends, that may work differently on some
 webOS versions/hardware platforms.
 
-| Backend        | Description                                                                                    | Video | UI | Framerate | webOS |
-|----------------|------------------------------------------------------------------------------------------------|-------|----|-----------|-------|
-| `libdile_vt`   | Low-level library used internally by libvt                                                     |   ✔   | ✘¹ | 60        | 3.x+ |
-| `libvt`        | High-level video rendering library, uses OpenGL, may cause flickering/"No signal" until reboot |   ✔   | ✘¹ | ~30       | 3.x+ |
-| `libvtcapture` | High-level video capture library, uses Luna bus, could possibly work without root (not now)    |   ✔   | ✔  | ~25       | 5.x+ |
+Now, with unicapture, video and ui backends are seperated and only blended together if desired.
 
-¹ - UI capture could be added at some point in the future
+This means, UI or video capture can be turned on/off individually.
+
+### Video capturing
+
+| Backend        | Description                                | webOS |
+|----------------|--------------------------------------------|-------|
+| `libdile_vt`   | Low-level library used internally by libvt | 3.x+  |
+| `libvtcapture` | High-level video capture library           | 5.x+  |
+
+### UI capturing
+
+| Backend        | Description                                | webOS |
+|----------------|--------------------------------------------|-------|
+| `libgm`        | Low-level library used internally by libvt | 3.x+  |
+| `libhalgal`    | High-level video capture library           | 5.x+  |
+
 
 ## Running
 
