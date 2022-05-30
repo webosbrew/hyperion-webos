@@ -39,6 +39,30 @@ This means, UI or video capture can be turned on/off individually.
 | `libgm`        | Low-level library used internally by libvt | 3.x+  |
 | `libhalgal`    | High-level video capture library           | 5.x+  |
 
+### Quirks
+
+Some TV models generally are comptabile with a specific backend, but require a slightly different routine
+to work reliably.
+
+In this case, to not need totally different binaries, we implemented *quirks*, which can be toggled on if needed.
+
+Currently the following ones exist:
+
+| Backend   | Quirk                   | Description                                         | Flag |
+| --------- | ----------------------- | --------------------------------------------------- | ---- |
+| DILE_VT   | QUIRK_DILE_VT_CREATE_EX | Use `DILE_VT_CreateEx` instead of `DILE_VT_Create`  | 0x1  |
+| DILE_VT   | QUIRK_DILE_VT_NO_FREEZE_CAPTURE | Do not freeze frame before capturing (higher fps) | 0x2 |
+
+
+They can be provided in `config.json` via the `{"quirks": 0}` field or on commandline via `--quirks`.
+
+Easiest way though -> Use PicCap GUI!
+
+You can assemble the final quirks value by using a *bitwise-OR*,
+e.g. `quirks_value = (quirk_val | quirk_val2 | quirk_val3)`.
+The calculator is your friend ;)
+
+You can find them defined here: [Source code file](https://github.com/webosbrew/hyperion-webos/blob/master/src/quirks.h)
 
 ## Running
 
