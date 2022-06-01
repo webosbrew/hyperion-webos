@@ -4,6 +4,22 @@
 
 AmbientLightingDaemon daemon_flavor = DAEMON_NOT_SET;
 
+const char *daemon_to_string(AmbientLightingDaemon flavor)
+{
+    switch (flavor) {
+        case DAEMON_INVALID:
+            return "INVALID";
+        case DAEMON_NOT_SET:
+            return "NOT SET";
+        case DAEMON_HYPERION_NG:
+            return "Hyperion.NG";
+        case DAEMON_HYPERHDR:
+            return "HyperHDR";
+        default:
+            return "<UNKNOWN>";
+    }
+}
+
 int do_http_post(char *url, const char *post_body, char **response_body, int out_buf_sz)
 {
    int ret = 0;
