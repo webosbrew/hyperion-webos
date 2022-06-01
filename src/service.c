@@ -1,5 +1,6 @@
 #include "service.h"
 #include "hyperion_client.h"
+#include "json_rpc_client.h"
 #include "log.h"
 #include "pthread.h"
 #include "settings.h"
@@ -387,25 +388,23 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
         return false;
     }
 
+    bool hdr_enabled;
     raw_buffer hdr_type_buf = jstring_get(hdr_type_ref);
     const char* hdr_type_str = hdr_type_buf.m_str;
 
-    char hdr_enabled_str[8];
-    char command_str[256];
-
     if (strcmp(hdr_type_str, "none") == 0) {
-        INFO("hdrType: %s --> SDR mode", hdr_type_str);
-        sprintf(hdr_enabled_str, "false");
+        INFO("videooutput_callback: hdrType: %s --> SDR mode", hdr_type_str);
+        hdr_enabled = false;
     }
     else {
-        INFO("hdrType: %s --> HDR mode", hdr_type_str);
-        sprintf(hdr_enabled_str, "true");
+        INFO("videooutput_callback: hdrType: %s --> HDR mode", hdr_type_str);
+        hdr_enabled = true;
     }
 
-    // fixed to HyperHDR's standard port 8090 for now
-    sprintf(command_str, "curl -s http://%s:8090/json-rpc?request=%%7B%%22command%%22:%%22componentstate%%22,%%22componentstate%%22:%%7B%%22component%%22:%%22HDR%%22,%%22state%%22:%s%%7D%%7D > /dev/null", 
-            service->settings->address, hdr_enabled_str);
-    system(command_str);
+    int ret = set_hdr_state(service->settings->address, RPC_PORT, hdr_enabled);
+    if (ret != 0) {
+        ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
+    }
 
     jstring_free_buffer(hdr_type_buf);
     j_release(&parsed);
@@ -442,25 +441,23 @@ static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* ms
         return false;
     }
 
+    bool hdr_enabled;
     raw_buffer dynamic_range_buf = jstring_get(dynamic_range_ref);
     const char* dynamic_range_str = dynamic_range_buf.m_str;
 
-    char hdr_enabled_str[8];
-    char command_str[256];
-
     if (strcmp(dynamic_range_str, "sdr") == 0) {
-        INFO("dynamicRange: %s --> SDR mode", dynamic_range_str);
-        sprintf(hdr_enabled_str, "false");
+        INFO("picture_callback: dynamicRange: %s --> SDR mode", dynamic_range_str);
+        hdr_enabled = false;
     }
     else {
-        INFO("dynamicRange: %s --> HDR mode", dynamic_range_str);
-        sprintf(hdr_enabled_str, "true");
+        INFO("picture_callback: dynamicRange: %s --> HDR mode", dynamic_range_str);
+        hdr_enabled = true;
     }
 
-    // fixed to HyperHDR's standard port 8090 for now
-    sprintf(command_str, "curl -s http://%s:8090/json-rpc?request=%%7B%%22command%%22:%%22componentstate%%22,%%22componentstate%%22:%%7B%%22component%%22:%%22HDR%%22,%%22state%%22:%s%%7D%%7D > /dev/null", 
-            service->settings->address, hdr_enabled_str);
-    system(command_str);
+    int ret = set_hdr_state(service->settings->address, RPC_PORT, hdr_enabled);
+    if (ret != 0) {
+        ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
+    }
 
     jstring_free_buffer(dynamic_range_buf);
     j_release(&parsed);
