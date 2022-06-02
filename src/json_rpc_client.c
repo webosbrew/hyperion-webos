@@ -173,6 +173,11 @@ int set_hdr_state(char *host, ushort rpc_port, bool hdr_active)
         INFO("Detected daemon flavor: %d (%s)", daemon_flavor, daemon_to_string(daemon_flavor));
     }
 
+    if (daemon_flavor != DAEMON_HYPERHDR) {
+        WARN("set_hdr_state: Daemon is not HyperHDR -> Not submitting HDR state!");
+        return -2;
+    }
+
     jvalue_ref response_body_jval;
     jvalue_ref post_body = jobject_create();
     jvalue_ref component_state_jobj = jobject_create();
@@ -188,7 +193,7 @@ int set_hdr_state(char *host, ushort rpc_port, bool hdr_active)
 
     if((ret = send_rpc_message(host, rpc_port, post_body, &response_body_jval)) != 0) {
         WARN("set_hdr_state: Failed to send RPC message, code: %d", ret);
-        ret = -2;
+        ret = -3;
     }
 
     j_release(&post_body);
