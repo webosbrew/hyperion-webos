@@ -31,7 +31,7 @@ int do_http_post(char *url, const char *post_body, char **response_body, int out
       goto exit;
    }
 
-   sprintf(command, "curl -q -X POST %s -d '%s'", url, post_body);
+   sprintf(command, "curl --silent -X POST %s -d '%s'", url, post_body);
    DBG("do_http_post: Command: %s", command);
 
    FILE *fd = popen(command, "r");
