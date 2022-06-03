@@ -44,7 +44,7 @@ int do_http_post(char *url, const char *post_body, char **response_body, int out
 
    fread(*response_body, out_buf_sz, 1, fd);
 
-   ret = fclose(fd);
+   ret = pclose(fd);
    if (ret != 0) {
       ERR("Curl process failed! Code: 0x%x", ret);
       ret = -3;
