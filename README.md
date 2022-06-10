@@ -36,8 +36,8 @@ This means, UI or video capture can be turned on/off individually.
 
 | Backend        | Description                                | webOS |
 |----------------|--------------------------------------------|-------|
-| `libgm`        | Low-level library used internally by libvt | 3.x+  |
-| `libhalgal`    | High-level video capture library           | 5.x+  |
+| `libgm`        | UI capture library for older TVs           | 3.x+  |
+| `libhalgal`    | UI capture library for newer TVs           | 5.x+  |
 
 ### Quirks
 
