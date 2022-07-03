@@ -64,16 +64,25 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     DBG("maxResolution: %dx%d", limitation.maxResolution.width, limitation.maxResolution.height);
     DBG("input deinterlace: %d; display deinterlace: %d", limitation.supportInputVideoDeInterlacing, limitation.supportDisplayVideoDeInterlacing);
 
-    DILE_VT_DUMP_LOCATION_TYPE_T dump_location = DILE_VT_DISPLAY_OUTPUT;
-
-    if (DILE_VT_SetVideoFrameOutputDeviceDumpLocation(vth, dump_location) != 0) {
-        WARN("[DILE_VT] DISPLAY dump location failed, attempting SCALER...");
-        dump_location = DILE_VT_SCALER_OUTPUT;
+    DILE_VT_DUMP_LOCATION_TYPE_T dump_location;
+    if (HAS_QUIRK(config->quirks, QUIRK_DILE_VT_DUMP_LOCATION_2)) {
+        // Quirk for WebOS 3.4 initialization
+        INFO("[QUIRK_DILE_VT_DUMP_LOCATION_2]: Attempting UNDOCUMENTED dump location 2...");
+        dump_location = 2;
         if (DILE_VT_SetVideoFrameOutputDeviceDumpLocation(vth, dump_location) != 0) {
-            ERR("[DILE_VT] SCALER dump location failed, attempting UNDOCUMENTED DUMP LOCATION: 2!");
-            dump_location = 2;
+            ERR("[DILE_VT] SetVideoFrameOutputDeviceDumpLocation (2) failed!");
+            ret = -2;
+            goto err_destroy;
+        }
+        INFO("[QUIRK_DILE_VT_DUMP_LOCATION_2]: SetVideoFrameOutputDeviceDumpLocation success");
+    } else {
+        // Regular operation: No quirk set
+        dump_location = DILE_VT_DISPLAY_OUTPUT;
+        if (DILE_VT_SetVideoFrameOutputDeviceDumpLocation(vth, dump_location) != 0) {
+            WARN("[DILE_VT] DISPLAY dump location failed, attempting SCALER...");
+            dump_location = DILE_VT_SCALER_OUTPUT;
             if (DILE_VT_SetVideoFrameOutputDeviceDumpLocation(vth, dump_location) != 0) {
-                ERR("[DILE_VT] SetVideoFrameOutputDeviceDumpLocation failed!");
+                ERR("[DILE_VT] SCALER dump location failed, Exiting!");
                 ret = -2;
                 goto err_destroy;
             }
