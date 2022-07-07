@@ -93,12 +93,12 @@ int capture_start(void* state)
         goto err_init;
     } else if (ret == 11) {
 
-        ERR("vtCapture_init failed: %d Permission denied! Quitting...", ret);
+        ERR("vtCapture_init failed: %d Permission denied!", ret);
         ret = -3;
         goto err_init;
     } else if (ret != 0) {
 
-        ERR("vtCapture_init failed: %d Quitting...", ret);
+        ERR("vtCapture_init failed: %d", ret);
         ret = -4;
         goto err_init;
     }
@@ -110,7 +110,7 @@ int capture_start(void* state)
         ret = -5;
         goto err_preprocess;
     } else if (ret != 0) {
-        ERR("vtCapture_preprocess failed: %d Quitting...", ret);
+        ERR("vtCapture_preprocess failed: %d", ret);
         ret = -6;
         goto err_preprocess;
     }
@@ -119,7 +119,7 @@ int capture_start(void* state)
     _LibVtCapturePlaneInfo plane;
     if ((ret = vtCapture_planeInfo(self->driver, self->client, &plane)) != 0) {
 
-        ERR("vtCapture_planeInfo failed: %d Quitting...", ret);
+        ERR("vtCapture_planeInfo failed: %d", ret);
         ret = -7;
         goto err_planeinfo;
     }
@@ -138,7 +138,7 @@ int capture_start(void* state)
 
     if ((ret = vtCapture_process(self->driver, self->client)) != 0) {
 
-        ERR("vtCapture_process failed: %d Quitting...", ret);
+        ERR("vtCapture_process failed: %d", ret);
         ret = -1;
         goto err_process;
     }
