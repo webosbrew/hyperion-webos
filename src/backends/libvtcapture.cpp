@@ -110,16 +110,16 @@ int capture_start(void* state)
         ret = -5;
         goto err_preprocess;
     } else if (ret != 0) {
-        ERR("vtCapture_preprocess failed: %x Quitting...", ret);
+        ERR("vtCapture_preprocess failed: %d Quitting...", ret);
         ret = -6;
         goto err_preprocess;
     }
     INFO("vtCapture_preprocess done!");
 
     _LibVtCapturePlaneInfo plane;
-    if ((vtCapture_planeInfo(self->driver, self->client, &plane)) != 0) {
+    if ((ret = vtCapture_planeInfo(self->driver, self->client, &plane)) != 0) {
 
-        ERR("vtCapture_planeInfo failed: %xQuitting...", ret);
+        ERR("vtCapture_planeInfo failed: %d Quitting...", ret);
         ret = -7;
         goto err_planeinfo;
     }
@@ -136,9 +136,9 @@ int capture_start(void* state)
 
     INFO("vtcapture initialization finished.");
 
-    if ((vtCapture_process(self->driver, self->client)) != 0) {
+    if ((ret = vtCapture_process(self->driver, self->client)) != 0) {
 
-        ERR("vtCapture_process failed: %xQuitting...", ret);
+        ERR("vtCapture_process failed: %d Quitting...", ret);
         ret = -1;
         goto err_process;
     }
@@ -176,10 +176,11 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
 {
     vtcapture_backend_state_t* self = (vtcapture_backend_state_t*)state;
     _LibVtCaptureBufferInfo buff;
+    int ret = 0;
 
-    if (vtCapture_currentCaptureBuffInfo(self->driver, &buff) != 0) {
+    if ((ret = vtCapture_currentCaptureBuffInfo(self->driver, &buff)) != 0) {
 
-        ERR("vtCapture_currentCaptureBuffInfo() failed.");
+        ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
         return -1;
     }
 
@@ -205,12 +206,13 @@ int capture_wait(void* state)
 {
     vtcapture_backend_state_t* self = (vtcapture_backend_state_t*)state;
     uint32_t attempt_count = 0;
+    int ret = 0;
 
     // wait until buffer address changed
     while (!self->terminate) {
-        if (vtCapture_currentCaptureBuffInfo(self->driver, &self->buff) != 0) {
+        if ((ret = vtCapture_currentCaptureBuffInfo(self->driver, &self->buff)) != 0) {
 
-            ERR("vtCapture_currentCaptureBuffInfo() failed.");
+            ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
             return -1;
         }
 
