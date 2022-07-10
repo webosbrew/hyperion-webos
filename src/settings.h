@@ -36,3 +36,7 @@ int settings_save_json(settings_t* settings, jvalue_ref target);
 
 int settings_load_file(settings_t* settings, char* source);
 int settings_save_file(settings_t* settings, char* target);
+
+int settings_check_changes(settings_t *old_settings, settings_t *new_settings,
+    bool *ui_reinit, bool *video_reinit
+);

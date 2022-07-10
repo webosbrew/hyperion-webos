@@ -260,7 +260,10 @@ bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
         j_release(&parsed);
         return false;
     }
+    settings_t* old_settings = calloc(1, sizeof(settings_t));
+    memcpy(old_settings, service->settings, sizeof(settings_t));
 
+    bool settings_changed = false;
     int res = settings_load_json(service->settings, parsed);
     if (res == 0) {
         if (settings_save_file(service->settings, SETTINGS_PERSISTENCE_PATH) != 0) {
@@ -281,10 +284,19 @@ bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
                 WARN("Startup symlink creation failed: %s", strerror(errno));
             }
         }
+
+        if (settings_check_changes(old_settings, service->settings,
+                &service->unicapture.ui_reinit_needed, &service->unicapture.video_reinit_needed))
+        {
+            settings_changed = true;
+            INFO("Settings changed, reinitializing -> video: %s, ui: %s",
+                service->unicapture.video_reinit_needed, service->unicapture.ui_reinit_needed);
+        }
     }
 
     jvalue_ref jobj = jobject_create();
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(res == 0));
+    jobject_set(jobj, j_cstr_to_buffer("settingsChanged"), jboolean_create(settings_changed));
 
     LSMessageReply(sh, msg, jvalue_tostring_simple(jobj), &lserror);
 

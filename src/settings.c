@@ -1,4 +1,5 @@
 #include "settings.h"
+#include "log.h"
 #include <stdio.h>
 
 void settings_init(settings_t* settings)
@@ -154,4 +155,27 @@ int settings_save_file(settings_t* settings, char* target)
 
     j_release(&jobj);
     return 0;
+}
+
+int settings_check_changes(settings_t *old_settings, settings_t *new_settings,
+                                bool *ui_reinit, bool *video_reinit)
+{
+    if(old_settings->video_backend != new_settings->video_backend) {
+        DBG("Video backend changed -> %s", new_settings->video_backend == NULL ? "NONE" : new_settings->video_backend);
+        *video_reinit = true;
+    }
+    if(old_settings->ui_backend != new_settings->ui_backend) {
+        DBG("UI backend changed -> %s", new_settings->ui_backend == NULL ? "NONE" : new_settings->ui_backend);
+        *ui_reinit = true;
+    }
+    if(old_settings->width != new_settings->width || old_settings->height != new_settings->height) {
+        DBG("Resolution changed: %dx%d -> %dx%d",
+            old_settings->width, old_settings->height,
+            new_settings->width, new_settings->height
+        );
+        *ui_reinit = true;
+        *video_reinit = true;
+    }
+
+    return (*ui_reinit || *video_reinit);
 }

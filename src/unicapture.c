@@ -130,6 +130,26 @@ void* unicapture_run(void* data)
     while (this->running) {
         uint64_t now = getticks_us();
 
+
+        // TODO: Access config / settings struct
+        if(this->ui_reinit_needed && ui_capture != NULL && this->ui_capture_running) {
+            INFO("Re-initializing UI backend...");
+            ui_capture->terminate(ui_capture->state);
+            ui_capture->cleanup(ui_capture->state);
+            ui_capture->init(/*TODO: Access config */NULL, &ui_capture->state);
+            this->ui_capture_running = false;
+            this->ui_reinit_needed = false;
+        }
+
+        if(this->video_reinit_needed && video_capture != NULL && this->video_capture_running) {
+            INFO("Re-initializing video backend...");
+            video_capture->terminate(video_capture->state);
+            video_capture->cleanup(video_capture->state);
+            video_capture->init(/*TODO: Access config */NULL, &video_capture->state);
+            this->video_capture_running = false;
+            this->video_reinit_needed = false;
+        }
+
         if ((now - last_ui_start) > 1000000 && ui_capture != NULL && !this->ui_capture_running) {
             last_ui_start = now;
             DBG("Attempting UI capture init...");

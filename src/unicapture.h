@@ -86,6 +86,9 @@ typedef struct _unicapture_state {
     bool running;
     pthread_t main_thread;
 
+    bool ui_reinit_needed;
+    bool video_reinit_needed;
+
     bool ui_capture_running;
     bool video_capture_running;
 
