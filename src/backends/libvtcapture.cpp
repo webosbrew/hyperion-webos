@@ -2,11 +2,18 @@
 #include <stdlib.h> // calloc()
 #include <unistd.h> // usleep()
 
+#include <fcntl.h>
+#include <sys/ioctl.h> //ioctl
+
 #include "log.h"
 #include "unicapture.h"
+#include "quirks.h"
 
 extern "C" {
 #include <vtcapture/vtCaptureApi_c.h>
+
+#define FCI_MAGIC 'Z'
+#define FC_K6HP _IO(FCI_MAGIC, 0)
 
 typedef struct _vtcapture_backend_state {
     int width;
@@ -18,6 +25,7 @@ typedef struct _vtcapture_backend_state {
     _LibVtCaptureProperties props;
     char* curr_buff;
     bool terminate;
+    bool quirk_k6hp_force_capture;
 } vtcapture_backend_state_t;
 
 int capture_terminate(void* state);
@@ -52,6 +60,10 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     self->props.reg.w = config->resolution_width;
     self->props.reg.h = config->resolution_height;
     self->props.buf_cnt = 3;
+
+    if (HAS_QUIRK(config->quirks, QUIRK_VTCAPTURE_K6HP_FORCE_CAPTURE)) {
+        self->quirk_k6hp_force_capture = true;
+    }
 
     *state_p = self;
 
@@ -89,6 +101,22 @@ int capture_start(void* state)
     if ((ret = vtCapture_init(self->driver, caller, self->client)) == 17) {
 
         ERR("vtCapture_init not ready yet return: %d", ret);
+        //Quirk
+        if (self->quirk_k6hp_force_capture) {
+            int fd;
+    
+            DBG("Quirk enabled. Open /dev/forcecapture");
+            fd = open("/dev/forcecapture", O_RDWR);
+            if(fd < 0) {
+                    ERR("Can't open /dev/forcecapture!");
+            }
+    
+            INFO("QUIRK_VTCAPTURE_K6HP_FORCE_CAPTURE: Calling interface with FC_K6HP");
+            ioctl(fd, FC_K6HP); 
+    
+            DBG("Closing /dev/forcecapture");
+            close(fd);
+        }
         ret = -2;
         goto err_init;
     } else if (ret == 11) {
@@ -210,7 +238,29 @@ int capture_wait(void* state)
 
     // wait until buffer address changed
     while (!self->terminate) {
-        if ((ret = vtCapture_currentCaptureBuffInfo(self->driver, &self->buff)) != 0) {
+        if ((ret = vtCapture_currentCaptureBuffInfo(self->driver, &self->buff)) == 17) {
+
+            ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
+            //Quirk
+            if (self->quirk_k6hp_force_capture) {
+                int fd;
+        
+                DBG("Quirk enabled. Open /dev/forcecapture");
+                fd = open("/dev/forcecapture", O_RDWR);
+                if(fd < 0) {
+                        ERR("Can't open /dev/forcecapture!");
+                }
+        
+                INFO("QUIRK_VTCAPTURE_K6HP_FORCE_CAPTURE: Calling interface with FC_K6HP");
+                ioctl(fd, FC_K6HP); 
+        
+                DBG("Closing /dev/forcecapture");
+                close(fd);
+
+                return -99; //Restart video capture
+            }
+            return -1;
+        } else if (ret != 0) {
 
             ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
             return -1;
@@ -223,7 +273,7 @@ int capture_wait(void* state)
         if (attempt_count >= 1000000 / 100) {
             // Prevent hanging...
             WARN("captureCurrentBuffInfo() never returned a new plane!");
-            return 1;
+            return -99; //Restart video capture
         }
         usleep(100);
     }

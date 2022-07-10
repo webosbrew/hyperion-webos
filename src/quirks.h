@@ -11,5 +11,6 @@ enum CAPTURE_QUIRKS {
        DILE_VT_SetVideoFrameOutputDeviceDumpLocation and
        DILE_VT_SetVideoFrameOutputDeviceOutputRegion
     */
-    QUIRK_DILE_VT_DUMP_LOCATION_2 = 0x4
+    QUIRK_DILE_VT_DUMP_LOCATION_2 = 0x4,
+    QUIRK_VTCAPTURE_K6HP_FORCE_CAPTURE = 0x8
 };
