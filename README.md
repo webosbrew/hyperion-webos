@@ -53,6 +53,7 @@ Currently the following ones exist:
 | DILE_VT   | QUIRK_DILE_VT_CREATE_EX | Use `DILE_VT_CreateEx` instead of `DILE_VT_Create`  | 0x1  |
 | DILE_VT   | QUIRK_DILE_VT_NO_FREEZE_CAPTURE | Do not freeze frame before capturing (higher fps) | 0x2 |
 | DILE_VT   | QUIRK_DILE_VT_DUMP_LOCATION_2   | (webOS 3.4) Use undocumented dump location 2 | 0x4  |
+| VTCAPTURE   | QUIRK_VTCAPTURE_K6HP_FORCE_CAPTURE   | Uses [this](https://github.com/TBRlyNotMe/force-capture-interface) to reenable capture on black video | 0x8  |
 
 
 They can be provided in `config.json` via the `{"quirks": 0}` field or on commandline via `--quirks`.
