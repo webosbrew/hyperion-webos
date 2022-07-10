@@ -45,8 +45,6 @@ int capture_init(cap_backend_config_t* config, void** state_p)
             goto err_destroy;
         }
     } catch (const std::runtime_error& err) {
-        WARN("vtCapture_create() failed: %s", err.what());
-        ret = -2;
         goto err_destroy;
     }
 
@@ -109,6 +107,8 @@ int capture_start(void* state)
             fd = open("/dev/forcecapture", O_RDWR);
             if(fd < 0) {
                     ERR("Can't open /dev/forcecapture!");
+                    ret = -2;
+                    goto err_init;
             }
     
             INFO("QUIRK_VTCAPTURE_K6HP_FORCE_CAPTURE: Calling interface with FC_K6HP");
@@ -249,6 +249,7 @@ int capture_wait(void* state)
                 fd = open("/dev/forcecapture", O_RDWR);
                 if(fd < 0) {
                         ERR("Can't open /dev/forcecapture!");
+                        return -2;
                 }
         
                 INFO("QUIRK_VTCAPTURE_K6HP_FORCE_CAPTURE: Calling interface with FC_K6HP");
