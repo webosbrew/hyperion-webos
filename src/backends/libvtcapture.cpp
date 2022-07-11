@@ -25,7 +25,7 @@ typedef struct _vtcapture_backend_state {
     _LibVtCaptureProperties props;
     char* curr_buff;
     bool terminate;
-    bool quirk_k6hp_force_capture;
+    bool quirk_force_capture;
 } vtcapture_backend_state_t;
 
 int capture_terminate(void* state);
@@ -59,8 +59,8 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     self->props.reg.h = config->resolution_height;
     self->props.buf_cnt = 3;
 
-    if (HAS_QUIRK(config->quirks, QUIRK_VTCAPTURE_K6HP_FORCE_CAPTURE)) {
-        self->quirk_k6hp_force_capture = true;
+    if (HAS_QUIRK(config->quirks, QUIRK_VTCAPTURE_FORCE_CAPTURE)) {
+        self->quirk_force_capture = true;
     }
 
     *state_p = self;
@@ -100,7 +100,7 @@ int capture_start(void* state)
 
         ERR("vtCapture_init not ready yet return: %d", ret);
         //Quirk
-        if (self->quirk_k6hp_force_capture) {
+        if (self->quirk_force_capture) {
             int fd;
     
             DBG("Quirk enabled. Open /dev/forcecapture");
@@ -111,7 +111,7 @@ int capture_start(void* state)
                     goto err_init;
             }
     
-            INFO("QUIRK_VTCAPTURE_K6HP_FORCE_CAPTURE: Calling interface with FC_K6HP");
+            INFO("QUIRK_VTCAPTURE_FORCE_CAPTURE: Calling interface with FC_K6HP");
             ioctl(fd, FC_K6HP); 
     
             DBG("Closing /dev/forcecapture");
@@ -242,7 +242,7 @@ int capture_wait(void* state)
 
             ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
             //Quirk
-            if (self->quirk_k6hp_force_capture) {
+            if (self->quirk_force_capture) {
                 int fd;
         
                 DBG("Quirk enabled. Open /dev/forcecapture");
@@ -252,7 +252,7 @@ int capture_wait(void* state)
                         return -2;
                 }
         
-                INFO("QUIRK_VTCAPTURE_K6HP_FORCE_CAPTURE: Calling interface with FC_K6HP");
+                INFO("QUIRK_VTCAPTURE_FORCE_CAPTURE: Calling interface with FC_K6HP");
                 ioctl(fd, FC_K6HP); 
         
                 DBG("Closing /dev/forcecapture");
