@@ -14,7 +14,6 @@ Based on reverse-engineered internal system APIs. Still highly experimental.
 If you are looking for a user-friendly UI that ships this piece of software check [PicCap](https://github.com/TBSniller/piccap). This application mainly is the underlaying service for this software.
 
 ## Known issues
-* `libvt`: may cause flickering or "No Signal" until reboot
 * Everything is based on highly platform-specific reverse-engineered internal
   system APIs. Standard no-warranty clauses apply.
 
@@ -22,13 +21,50 @@ If you are looking for a user-friendly UI that ships this piece of software chec
 This software uses multiple capture backends, that may work differently on some
 webOS versions/hardware platforms.
 
-| Backend        | Description                                                                                    | Video | UI | Framerate | webOS |
-|----------------|------------------------------------------------------------------------------------------------|-------|----|-----------|-------|
-| `libdile_vt`   | Low-level library used internally by libvt                                                     |   ✔   | ✘¹ | 60        | 3.x+ |
-| `libvt`        | High-level video rendering library, uses OpenGL, may cause flickering/"No signal" until reboot |   ✔   | ✘¹ | ~30       | 3.x+ |
-| `libvtcapture` | High-level video capture library, uses Luna bus, could possibly work without root (not now)    |   ✔   | ✔  | ~25       | 5.x+ |
+Now, with unicapture, video and ui backends are seperated and only blended together if desired.
 
-¹ - UI capture could be added at some point in the future
+This means, UI or video capture can be turned on/off individually.
+
+### Video capturing
+
+| Backend        | Description                                | webOS |
+|----------------|--------------------------------------------|-------|
+| `libdile_vt`   | Low-level library used internally by libvt | 3.x+  |
+| `libvtcapture` | High-level video capture library           | 5.x+  |
+
+### UI capturing
+
+| Backend        | Description                                | webOS |
+|----------------|--------------------------------------------|-------|
+| `libgm`        | UI capture library for older TVs           | 3.x+  |
+| `libhalgal`    | UI capture library for newer TVs           | 5.x+  |
+
+### Quirks
+
+Some TV models generally are comptabile with a specific backend, but require a slightly different routine
+to work reliably.
+
+In this case, to not need totally different binaries, we implemented *quirks*, which can be toggled on if needed.
+
+Currently the following ones exist:
+
+| Backend   | Quirk                   | Description                                         | Flag |
+| --------- | ----------------------- | --------------------------------------------------- | ---- |
+| DILE_VT   | QUIRK_DILE_VT_CREATE_EX | Use `DILE_VT_CreateEx` instead of `DILE_VT_Create`  | 0x1  |
+| DILE_VT   | QUIRK_DILE_VT_NO_FREEZE_CAPTURE | Do not freeze frame before capturing (higher fps) | 0x2 |
+| DILE_VT   | QUIRK_DILE_VT_DUMP_LOCATION_2   | (webOS 3.4) Use undocumented dump location 2 | 0x4  |
+| VTCAPTURE   | QUIRK_VTCAPTURE_K6HP_FORCE_CAPTURE   | Use of a custom kernel module for reenable capture in special situation | 0x8  |
+
+
+They can be provided in `config.json` via the `{"quirks": 0}` field or on commandline via `--quirks`.
+
+Easiest way though -> Use PicCap GUI!
+
+You can assemble the final quirks value by using a *bitwise-OR*,
+e.g. `quirks_value = (quirk_val | quirk_val2 | quirk_val3)`.
+The calculator is your friend ;)
+
+You can find them defined here: [Source code file](https://github.com/webosbrew/hyperion-webos/blob/master/src/quirks.h)
 
 ## Running
 
@@ -38,7 +74,7 @@ the TV, eg. into `/tmp` directory.
 ```sh
 cd /tmp
 ./hyperion-webos --help
-./hyperion-webos -S -b libdile_vt -a 10.0.0.1
+./hyperion-webos -b libdile_vt -a 10.0.0.1
 ```
 
 ## Issues reporting
