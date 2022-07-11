@@ -13,7 +13,7 @@ enum CAPTURE_QUIRKS {
     */
     QUIRK_DILE_VT_DUMP_LOCATION_2 = 0x4,
     
-    #vtCapture
+    //vtCapture
     // Reenables video capture using custom kernel module
     QUIRK_VTCAPTURE_FORCE_CAPTURE = 0x100
 };
