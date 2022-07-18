@@ -54,3 +54,14 @@ identifiable information.
 If a segfault/crash occurs, a crashlog file will be generated in `/var/log/reports/librdx`
 or `/tmp/faultmanager/crash/`. This contains process memory dump and backtrace,
 but *should* not contain any uniquely identifiable information. (though, this is not guaranteed)
+
+## Code style / linting
+
+To ensure a common codestyle on contributions, please ensure your submission is linted.
+The linting script depends on python3 / clang-format to be installed.
+
+Run the linting / formatter script like this:
+
+`python lint/run-clang-format.py --extensions "c,h,cpp" --color auto --recursive --inplace true ./src`
+
+To make a dry-run (and not auto-fix), omit the `--inplace true` parameter.
