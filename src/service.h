@@ -1,9 +1,9 @@
 #pragma once
 
-#include <pthread.h>
-#include <glib.h>
 #include "settings.h"
 #include "unicapture.h"
+#include <glib.h>
+#include <pthread.h>
 
 #define SERVICE_NAME "org.webosbrew.piccap.service"
 

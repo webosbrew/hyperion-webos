@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stdbool.h>
 #include <pbnjson.h>
+#include <stdbool.h>
 
 #define SETTINGS_PERSISTENCE_PATH "/media/developer/apps/usr/palm/services/org.webosbrew.piccap.service/config.json"
 

@@ -13,8 +13,8 @@
 #include <dile_vt.h>
 
 #include "log.h"
-#include "unicapture.h"
 #include "quirks.h"
+#include "unicapture.h"
 #include "utils.h"
 
 typedef struct _dile_vt_backend_state {

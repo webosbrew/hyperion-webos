@@ -1,6 +1,6 @@
-#include <unistd.h>
 #include "log.h"
 #include "unicapture.h"
+#include <unistd.h>
 
 int main()
 {

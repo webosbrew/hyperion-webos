@@ -18,8 +18,8 @@
 cap_backend_config_t config = { 0 };
 cap_imagedata_callback_t imagedata_cb = NULL;
 
-pthread_t capture_thread = (pthread_t) NULL;
-pthread_t vsync_thread = (pthread_t) NULL;
+pthread_t capture_thread = (pthread_t)NULL;
+pthread_t vsync_thread = (pthread_t)NULL;
 
 pthread_mutex_t vsync_lock;
 pthread_cond_t vsync_cond;
@@ -70,11 +70,11 @@ int capture_terminate()
 
     capture_running = false;
 
-    if (capture_thread != (pthread_t) NULL) {
+    if (capture_thread != (pthread_t)NULL) {
         pthread_join(capture_thread, NULL);
     }
 
-    if (use_vsync_thread && vsync_thread != (pthread_t) NULL) {
+    if (use_vsync_thread && vsync_thread != (pthread_t)NULL) {
         pthread_join(vsync_thread, NULL);
     }
 

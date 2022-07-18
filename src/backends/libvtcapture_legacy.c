@@ -592,7 +592,7 @@ void send_picture()
     }
 }
 
-void* capture_thread_target(void *data __attribute__((unused)))
+void* capture_thread_target(void* data __attribute__((unused)))
 {
     while (capture_run) {
         capture_frame();

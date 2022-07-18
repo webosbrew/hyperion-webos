@@ -56,3 +56,10 @@ jobs:
         path: |
           ${{github.workspace}}/build/hyperion-webos
           ${{github.workspace}}/build/*.so
+
+
+    - uses: DoozyX/clang-format-lint-action@v0.14
+      with:
+        source: './src'
+        extensions: 'c,h,cpp'
+        clangFormatVersion: 14
