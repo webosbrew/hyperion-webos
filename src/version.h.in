@@ -1,0 +1,3 @@
+#pragma once
+
+#define HYPERION_WEBOS_VERSION "@HYPERION_WEBOS_VERSION@"
