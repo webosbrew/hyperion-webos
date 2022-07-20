@@ -10,10 +10,13 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include "hyperion_reply_reader.h"
 #include "hyperion_request_builder.h"
+
+#define HYPERHDR_LOCAL_SOCKET_ADDR "/tmp/hyperhdr-domain"
 
 static int _send_message(const void* buffer, size_t size);
 static bool _parse_reply(hyperionnet_Reply_table_t reply);
@@ -32,8 +35,13 @@ int hyperion_client(const char* origin, const char* hostname, int port, int prio
     _connected = false;
     _registered = false;
     sockfd = 0;
-    struct sockaddr_in serv_addr;
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+
+    int domain = strcmp(hostname, HYPERHDR_LOCAL_SOCKET_ADDR) == 0 ? AF_UNIX : AF_INET;
+
+    struct sockaddr_un serv_addr_un;
+    struct sockaddr_in serv_addr_in;
+
+    if ((sockfd = socket(domain, SOCK_STREAM, 0)) == -1) {
         WARN("Could not create socket: %s", strerror(errno));
         return 1;
     }
@@ -55,17 +63,25 @@ int hyperion_client(const char* origin, const char* hostname, int port, int prio
         return 1;
     }
 
-    memset(&serv_addr, '0', sizeof(serv_addr));
+    if (domain == AF_INET) {
+        memset(&serv_addr_in, 0, sizeof(serv_addr_in));
 
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
+        serv_addr_in.sin_family = AF_INET;
+        serv_addr_in.sin_port = htons(port);
 
-    if (inet_pton(AF_INET, hostname, &serv_addr.sin_addr) <= 0) {
-        WARN("inet_pton error occured (hostname: %s): %s", hostname, strerror(errno));
-        return 1;
+        if (inet_pton(AF_INET, hostname, &serv_addr_in.sin_addr) <= 0) {
+            WARN("inet_pton error occured (hostname: %s): %s", hostname, strerror(errno));
+            return 1;
+        }
+    } else {
+        memset(&serv_addr_un, 0, sizeof(serv_addr_un));
+
+        serv_addr_un.sun_family = AF_LOCAL;
+        strcpy(serv_addr_un.sun_path, HYPERHDR_LOCAL_SOCKET_ADDR);
     }
 
-    if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+    if (connect(sockfd, domain == AF_INET ? (struct sockaddr*)&serv_addr_in : (struct sockaddr*)&serv_addr_un,
+            domain == AF_INET ? sizeof(serv_addr_in) : sizeof(serv_addr_un)) < 0) {
         WARN("connect() to %s:%d failed: %s", hostname, port, strerror(errno));
         return 1;
     }
