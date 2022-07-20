@@ -3,6 +3,7 @@
 #include "json_rpc_client.h"
 #include "log.h"
 #include "pthread.h"
+#include "quirks.h"
 #include "settings.h"
 #include "unicapture.h"
 #include "version.h"
@@ -401,6 +402,11 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
         hdr_enabled = true;
     }
 
+    if (HAS_QUIRK(service->settings->quirks, QUIRK_FORCE_HDR)) {
+        INFO("Forcing HDR state to enabled");
+        hdr_enabled = true;
+    }
+
     int ret = set_hdr_state(service->settings->address, RPC_PORT, hdr_enabled);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
@@ -451,6 +457,11 @@ static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* ms
     }
     else {
         INFO("picture_callback: dynamicRange: %s --> HDR mode", dynamic_range_str);
+        hdr_enabled = true;
+    }
+
+    if (HAS_QUIRK(service->settings->quirks, QUIRK_FORCE_HDR)) {
+        INFO("Forcing HDR state to enabled");
         hdr_enabled = true;
     }
 
