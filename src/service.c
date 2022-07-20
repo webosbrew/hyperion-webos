@@ -316,6 +316,10 @@ static bool power_callback(LSHandle* sh __attribute__((unused)), LSMessage* msg,
     jvalue_ref parsed;
     service_t* service = (service_t*)data;
 
+    if (service->settings->no_powerstate) {
+        return false;
+    }
+
     INFO("Power status callback message: %s", LSMessageGetPayload(msg));
 
     jschema_info_init(&schema, jschema_all(), NULL, NULL);
@@ -361,6 +365,10 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
     JSchemaInfo schema;
     jvalue_ref parsed;
     service_t* service = (service_t*)data;
+
+    if (service->settings->no_hdr) {
+        return false;
+    }
 
     // INFO("Videooutput status callback message: %s", LSMessageGetPayload(msg));
 
@@ -423,6 +431,10 @@ static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* ms
     JSchemaInfo schema;
     jvalue_ref parsed;
     service_t* service = (service_t*)data;
+
+    if (service->settings->no_hdr) {
+        return false;
+    }
 
     // INFO("getSystemSettings/picture status callback message: %s", LSMessageGetPayload(msg));
 
