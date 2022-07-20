@@ -11,5 +11,7 @@ enum CAPTURE_QUIRKS {
        DILE_VT_SetVideoFrameOutputDeviceDumpLocation and
        DILE_VT_SetVideoFrameOutputDeviceOutputRegion
     */
-    QUIRK_DILE_VT_DUMP_LOCATION_2 = 0x4
+    QUIRK_DILE_VT_DUMP_LOCATION_2 = 0x4,
+    // Forces hyperion-webos to enable HDR state no matter the actual content
+    QUIRK_FORCE_HDR = 0x8
 };
