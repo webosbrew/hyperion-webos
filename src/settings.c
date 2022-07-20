@@ -9,6 +9,7 @@ void settings_init(settings_t* settings)
     settings->address = strdup("");
     settings->port = 19400;
     settings->priority = 150;
+    settings->unix_socket = false;
 
     settings->fps = 30;
     settings->width = 320;
@@ -51,6 +52,8 @@ int settings_load_json(settings_t* settings, jvalue_ref source)
         jnumber_get_i32(value, &settings->port);
     if ((value = jobject_get(source, j_cstr_to_buffer("priority"))) && jis_number(value))
         jnumber_get_i32(value, &settings->priority);
+    if ((value = jobject_get(source, j_cstr_to_buffer("unix-socket"))) && jis_boolean(value))
+        jboolean_get(value, &settings->unix_socket);
 
     if ((value = jobject_get(source, j_cstr_to_buffer("fps"))) && jis_number(value))
         jnumber_get_i32(value, &settings->fps);
@@ -81,6 +84,7 @@ int settings_save_json(settings_t* settings, jvalue_ref target)
     jobject_set(target, j_cstr_to_buffer("address"), jstring_create(settings->address));
     jobject_set(target, j_cstr_to_buffer("port"), jnumber_create_i32(settings->port));
     jobject_set(target, j_cstr_to_buffer("priority"), jnumber_create_i32(settings->priority));
+    jobject_set(target, j_cstr_to_buffer("unix-socket"), jboolean_create(settings->unix_socket));
 
     jobject_set(target, j_cstr_to_buffer("fps"), jnumber_create_i32(settings->fps));
     jobject_set(target, j_cstr_to_buffer("width"), jnumber_create_i32(settings->width));

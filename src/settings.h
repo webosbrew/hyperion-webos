@@ -14,6 +14,7 @@ typedef struct _settings_t {
     char* address;
     int port;
     int priority;
+    bool unix_socket;
 
     int fps;
     int width;
