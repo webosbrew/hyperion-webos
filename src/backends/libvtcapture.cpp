@@ -261,6 +261,10 @@ int capture_wait(void* state)
                 return -99; //Restart video capture
             }
             return -1;
+        } else if (ret == 12) {
+            ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
+            DBG("Returning with video capture stop (-99), to get restarted in next routine.");
+            return -99; //Restart video capture
         } else if (ret != 0) {
 
             ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
