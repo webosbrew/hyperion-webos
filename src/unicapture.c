@@ -263,7 +263,7 @@ void* unicapture_run(void* data)
             INFO("Buffer dumped to: %s", filename);
         }
 
-        if (this->callback != NULL) {
+        if (got_frame && this->callback != NULL) {
             this->callback(this->callback_data, width, height, final_frame);
         }
 
