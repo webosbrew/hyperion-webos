@@ -84,6 +84,8 @@ int service_init(service_t* service, settings_t* settings)
     service->unicapture.callback_data = (void*)service;
     service->unicapture.dump_frames = settings->dump_frames;
 
+    unicapture_load_lut_table(&service->unicapture, settings->lut_table);
+
     char* ui_backends[] = { "libgm_backend.so", "libhalgal_backend.so", NULL };
     char* video_backends[] = { "libvtcapture_backend.so", "libdile_vt_backend.so", NULL };
     char backend_name[FILENAME_MAX] = { 0 };
