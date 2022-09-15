@@ -283,6 +283,13 @@ bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
         }
     }
 
+    if (service_destroy(service) == 0){
+        service_init(service, service->settings);
+        service_start(service);
+    }else{
+        service_init(service, service->settings);
+    }
+
     jvalue_ref jobj = jobject_create();
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(res == 0));
 
@@ -466,21 +473,25 @@ static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* ms
 int service_register(service_t* service, GMainLoop* loop)
 {
     LSHandle* handle = NULL;
+    LSHandle* handlelegacy = NULL;
     LSError lserror;
 
     LSErrorInit(&lserror);
 
+    bool registeredLegacy = false;
     bool registered = false;
 
-    if (&LSRegisterPubPriv != 0) {
-        DBG("Using LSRegisterPubPriv");
-        registered = LSRegisterPubPriv(SERVICE_NAME, &handle, true, &lserror);
+     if (&LSRegisterPubPriv != 0) {
+        DBG("Try register on LSRegister");
+        registered = LSRegister(SERVICE_NAME, &handle, &lserror);
+        DBG("Try legacy register on LSRegisterPubPriv");
+        registeredLegacy = LSRegisterPubPriv(SERVICE_NAME, &handlelegacy, true, &lserror);
     } else {
-        DBG("Using LSRegister");
+        DBG("Try register on LSRegister");
         registered = LSRegister(SERVICE_NAME, &handle, &lserror);
     }
 
-    if (!registered) {
+    if (!registered && !registeredLegacy) {
         ERR("Unable to register on Luna bus: %s", lserror.message);
         LSErrorFree(&lserror);
         return -1;
@@ -501,6 +512,24 @@ int service_register(service_t* service, GMainLoop* loop)
 
     if (!LSCall(handle, "luna://com.webos.settingsservice/getSystemSettings", "{\"category\":\"picture\",\"subscribe\":true}", picture_callback, (void*)service, NULL, &lserror)) {
         WARN("settingsservice/getSystemSettings call failed: %s", lserror.message);
+    }
+
+    if (registeredLegacy){
+        LSRegisterCategory(handlelegacy, "/", methods, NULL, NULL, &lserror);
+        LSCategorySetData(handlelegacy, "/", service, &lserror);
+        LSGmainAttach(handlelegacy, loop, &lserror);
+
+        if (!LSCall(handlelegacy, "luna://com.webos.service.tvpower/power/getPowerState", "{\"subscribe\":true}", power_callback, (void*)service, NULL, &lserror)) {
+            WARN("Power state monitoring call failed: %s", lserror.message);
+        }
+
+        if (!LSCall(handlelegacy, "luna://com.webos.service.videooutput/getStatus", "{\"subscribe\":true}", videooutput_callback, (void*)service, NULL, &lserror)) {
+            WARN("videooutput/getStatus call failed: %s", lserror.message);
+        }
+
+        if (!LSCall(handlelegacy, "luna://com.webos.settingsservice/getSystemSettings", "{\"category\":\"picture\",\"subscribe\":true}", picture_callback, (void*)service, NULL, &lserror)) {
+            WARN("settingsservice/getSystemSettings call failed: %s", lserror.message);
+        }
     }
 
     LSErrorFree(&lserror);

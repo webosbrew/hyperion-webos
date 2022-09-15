@@ -2,11 +2,18 @@
 #include <stdlib.h> // calloc()
 #include <unistd.h> // usleep()
 
+#include <fcntl.h>
+#include <sys/ioctl.h> //ioctl
+
 #include "log.h"
 #include "unicapture.h"
+#include "quirks.h"
 
 extern "C" {
 #include <vtcapture/vtCaptureApi_c.h>
+
+#define FCI_MAGIC 'Z'
+#define FC_K6HP _IO(FCI_MAGIC, 0)
 
 typedef struct _vtcapture_backend_state {
     int width;
@@ -18,6 +25,7 @@ typedef struct _vtcapture_backend_state {
     _LibVtCaptureProperties props;
     char* curr_buff;
     bool terminate;
+    bool quirk_force_capture;
 } vtcapture_backend_state_t;
 
 int capture_terminate(void* state);
@@ -37,8 +45,6 @@ int capture_init(cap_backend_config_t* config, void** state_p)
             goto err_destroy;
         }
     } catch (const std::runtime_error& err) {
-        WARN("vtCapture_create() failed: %s", err.what());
-        ret = -2;
         goto err_destroy;
     }
 
@@ -52,6 +58,10 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     self->props.reg.w = config->resolution_width;
     self->props.reg.h = config->resolution_height;
     self->props.buf_cnt = 3;
+
+    if (HAS_QUIRK(config->quirks, QUIRK_VTCAPTURE_FORCE_CAPTURE)) {
+        self->quirk_force_capture = true;
+    }
 
     *state_p = self;
 
@@ -89,16 +99,34 @@ int capture_start(void* state)
     if ((ret = vtCapture_init(self->driver, caller, self->client)) == 17) {
 
         ERR("vtCapture_init not ready yet return: %d", ret);
+        //Quirk
+        if (self->quirk_force_capture) {
+            int fd;
+    
+            DBG("Quirk enabled. Open /dev/forcecapture");
+            fd = open("/dev/forcecapture", O_RDWR);
+            if(fd < 0) {
+                    ERR("Can't open /dev/forcecapture!");
+                    ret = -2;
+                    goto err_init;
+            }
+    
+            INFO("QUIRK_VTCAPTURE_FORCE_CAPTURE: Calling interface with FC_K6HP");
+            ioctl(fd, FC_K6HP); 
+    
+            DBG("Closing /dev/forcecapture");
+            close(fd);
+        }
         ret = -2;
         goto err_init;
     } else if (ret == 11) {
 
-        ERR("vtCapture_init failed: %d Permission denied! Quitting...", ret);
+        ERR("vtCapture_init failed: %d Permission denied!", ret);
         ret = -3;
         goto err_init;
     } else if (ret != 0) {
 
-        ERR("vtCapture_init failed: %d Quitting...", ret);
+        ERR("vtCapture_init failed: %d", ret);
         ret = -4;
         goto err_init;
     }
@@ -110,16 +138,16 @@ int capture_start(void* state)
         ret = -5;
         goto err_preprocess;
     } else if (ret != 0) {
-        ERR("vtCapture_preprocess failed: %x Quitting...", ret);
+        ERR("vtCapture_preprocess failed: %d", ret);
         ret = -6;
         goto err_preprocess;
     }
     INFO("vtCapture_preprocess done!");
 
     _LibVtCapturePlaneInfo plane;
-    if ((vtCapture_planeInfo(self->driver, self->client, &plane)) != 0) {
+    if ((ret = vtCapture_planeInfo(self->driver, self->client, &plane)) != 0) {
 
-        ERR("vtCapture_planeInfo failed: %xQuitting...", ret);
+        ERR("vtCapture_planeInfo failed: %d", ret);
         ret = -7;
         goto err_planeinfo;
     }
@@ -136,9 +164,9 @@ int capture_start(void* state)
 
     INFO("vtcapture initialization finished.");
 
-    if ((vtCapture_process(self->driver, self->client)) != 0) {
+    if ((ret = vtCapture_process(self->driver, self->client)) != 0) {
 
-        ERR("vtCapture_process failed: %xQuitting...", ret);
+        ERR("vtCapture_process failed: %d", ret);
         ret = -1;
         goto err_process;
     }
@@ -176,10 +204,11 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
 {
     vtcapture_backend_state_t* self = (vtcapture_backend_state_t*)state;
     _LibVtCaptureBufferInfo buff;
+    int ret = 0;
 
-    if (vtCapture_currentCaptureBuffInfo(self->driver, &buff) != 0) {
+    if ((ret = vtCapture_currentCaptureBuffInfo(self->driver, &buff)) != 0) {
 
-        ERR("vtCapture_currentCaptureBuffInfo() failed.");
+        ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
         return -1;
     }
 
@@ -205,12 +234,40 @@ int capture_wait(void* state)
 {
     vtcapture_backend_state_t* self = (vtcapture_backend_state_t*)state;
     uint32_t attempt_count = 0;
+    int ret = 0;
 
     // wait until buffer address changed
     while (!self->terminate) {
-        if (vtCapture_currentCaptureBuffInfo(self->driver, &self->buff) != 0) {
+        if ((ret = vtCapture_currentCaptureBuffInfo(self->driver, &self->buff)) == 17) {
 
-            ERR("vtCapture_currentCaptureBuffInfo() failed.");
+            ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
+            //Quirk
+            if (self->quirk_force_capture) {
+                int fd;
+        
+                DBG("Quirk enabled. Open /dev/forcecapture");
+                fd = open("/dev/forcecapture", O_RDWR);
+                if(fd < 0) {
+                        ERR("Can't open /dev/forcecapture!");
+                        return -2;
+                }
+        
+                INFO("QUIRK_VTCAPTURE_FORCE_CAPTURE: Calling interface with FC_K6HP");
+                ioctl(fd, FC_K6HP); 
+        
+                DBG("Closing /dev/forcecapture");
+                close(fd);
+
+                return -99; //Restart video capture
+            }
+            return -1;
+        } else if (ret == 12) {
+            ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
+            DBG("Returning with video capture stop (-99), to get restarted in next routine.");
+            return -99; //Restart video capture
+        } else if (ret != 0) {
+
+            ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
             return -1;
         }
 
@@ -221,7 +278,7 @@ int capture_wait(void* state)
         if (attempt_count >= 1000000 / 100) {
             // Prevent hanging...
             WARN("captureCurrentBuffInfo() never returned a new plane!");
-            return 1;
+            return -99; //Restart video capture
         }
         usleep(100);
     }
