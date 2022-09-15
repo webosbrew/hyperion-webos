@@ -283,6 +283,13 @@ bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
         }
     }
 
+    if (service_destroy(service) == 0){
+        service_init(service, service->settings);
+        service_start(service);
+    }else{
+        service_init(service, service->settings);
+    }
+
     jvalue_ref jobj = jobject_create();
     jobject_set(jobj, j_cstr_to_buffer("returnValue"), jboolean_create(res == 0));
 
