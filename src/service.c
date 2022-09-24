@@ -283,10 +283,10 @@ bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
         }
     }
 
-    if (service_destroy(service) == 0){
+    if (service_destroy(service) == 0) {
         service_init(service, service->settings);
         service_start(service);
-    }else{
+    } else {
         service_init(service, service->settings);
     }
 
@@ -481,7 +481,7 @@ int service_register(service_t* service, GMainLoop* loop)
     bool registeredLegacy = false;
     bool registered = false;
 
-     if (&LSRegisterPubPriv != 0) {
+    if (&LSRegisterPubPriv != 0) {
         DBG("Try register on LSRegister");
         registered = LSRegister(SERVICE_NAME, &handle, &lserror);
         DBG("Try legacy register on LSRegisterPubPriv");
@@ -514,7 +514,7 @@ int service_register(service_t* service, GMainLoop* loop)
         WARN("settingsservice/getSystemSettings call failed: %s", lserror.message);
     }
 
-    if (registeredLegacy){
+    if (registeredLegacy) {
         LSRegisterCategory(handlelegacy, "/", methods, NULL, NULL, &lserror);
         LSCategorySetData(handlelegacy, "/", service, &lserror);
         LSGmainAttach(handlelegacy, loop, &lserror);

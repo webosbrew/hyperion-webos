@@ -86,7 +86,7 @@ void* unicapture_vsync_handler(void* data)
 
     while (this->vsync_thread_running) {
         if (this->vsync && this->video_capture_running && this->video_capture->wait) {
-            if ((this->video_capture->wait(this->video_capture->state)) == -99){  //stop video capture (will be started again in unicapture_run())
+            if ((this->video_capture->wait(this->video_capture->state)) == -99) { // stop video capture (will be started again in unicapture_run())
                 INFO("Stopping video capture.");
                 this->video_capture->terminate(this->video_capture->state);
                 this->video_capture_running = false;
