@@ -11,12 +11,17 @@ env:
 
 jobs:
   build-native-component:
+    strategy:
+      matrix:
+        build-type: [Debug, Release]
+
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: recursive
+        fetch-depth: 0
 
     - name: Download and unpack toolchain
       working-directory: /opt
@@ -39,7 +44,7 @@ jobs:
     - name: Build component
       working-directory: ${{github.workspace}}/build
       shell: bash
-      run: cmake -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE .. && make
+      run: cmake -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE .. && make hyperion-webos gm_backend halgal_backend dile_vt_backend vtcapture_backend
 
     - name: List files
       run: find .
@@ -47,9 +52,14 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
-        name: hyperion_webos
+        name: hyperion_webos_${{ matrix.build-type }}
         path: |
           ${{github.workspace}}/build/hyperion-webos
-          ${{github.workspace}}/build/libdile_vt_backend.so
-          ${{github.workspace}}/build/libvt_backend.so
-          ${{github.workspace}}/build/libvtcapture_backend.so
+          ${{github.workspace}}/build/*.so
+
+
+    - uses: DoozyX/clang-format-lint-action@v0.14
+      with:
+        source: './src'
+        extensions: 'c,h,cpp'
+        clangFormatVersion: 14
