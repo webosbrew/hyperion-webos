@@ -283,10 +283,10 @@ bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
         }
     }
 
-    if (service_destroy(service) == 0){
+    if (service_destroy(service) == 0) {
         service_init(service, service->settings);
         service_start(service);
-    }else{
+    } else {
         service_init(service, service->settings);
     }
 
@@ -402,8 +402,7 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
     if (strcmp(hdr_type_str, "none") == 0) {
         INFO("videooutput_callback: hdrType: %s --> SDR mode", hdr_type_str);
         hdr_enabled = false;
-    }
-    else {
+    } else {
         INFO("videooutput_callback: hdrType: %s --> HDR mode", hdr_type_str);
         hdr_enabled = true;
     }
@@ -455,8 +454,7 @@ static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* ms
     if (strcmp(dynamic_range_str, "sdr") == 0) {
         INFO("picture_callback: dynamicRange: %s --> SDR mode", dynamic_range_str);
         hdr_enabled = false;
-    }
-    else {
+    } else {
         INFO("picture_callback: dynamicRange: %s --> HDR mode", dynamic_range_str);
         hdr_enabled = true;
     }
@@ -483,7 +481,7 @@ int service_register(service_t* service, GMainLoop* loop)
     bool registeredLegacy = false;
     bool registered = false;
 
-     if (&LSRegisterPubPriv != 0) {
+    if (&LSRegisterPubPriv != 0) {
         DBG("Try register on LSRegister");
         registered = LSRegister(SERVICE_NAME, &handle, &lserror);
         DBG("Try legacy register on LSRegisterPubPriv");
@@ -516,7 +514,7 @@ int service_register(service_t* service, GMainLoop* loop)
         WARN("settingsservice/getSystemSettings call failed: %s", lserror.message);
     }
 
-    if (registeredLegacy){
+    if (registeredLegacy) {
         LSRegisterCategory(handlelegacy, "/", methods, NULL, NULL, &lserror);
         LSCategorySetData(handlelegacy, "/", service, &lserror);
         LSGmainAttach(handlelegacy, loop, &lserror);
