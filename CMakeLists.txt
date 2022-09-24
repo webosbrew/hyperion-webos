@@ -27,8 +27,6 @@ include_directories(${LS2_INCLUDE_DIRS})
 pkg_check_modules(PMLOG REQUIRED PmLogLib)
 include_directories(${PMLOG_INCLUDE_DIRS})
 
-pkg_check_modules(EGL egl REQUIRED)
-pkg_check_modules(GLESv2 glesv2 REQUIRED)
 
 find_package(Git)
 add_custom_target(version
@@ -63,21 +61,6 @@ target_link_libraries(hyperion-webos flatccrt pthread dl yuv rt ${GTHREAD2_LDFLA
 add_dependencies(hyperion-webos version)
 set_property(TARGET hyperion-webos PROPERTY ENABLE_EXPORTS 1)
 
-add_executable(unicapture-test
-    src/unicapture-test.c
-    src/unicapture.c
-    src/converter.c
-    src/log.c
-    src/utils.c
-)
-set_target_properties(unicapture-test PROPERTIES
-    BUILD_RPATH_USE_ORIGIN ON
-    INSTALL_RPATH "$ORIGIN:$ORIGIN/lib"
-    BUILD_RPATH "$ORIGIN:$ORIGIN/lib"
-)
-target_link_libraries(unicapture-test pthread dl yuv rt ${PMLOG_LDFLAGS})
-set_property(TARGET unicapture-test PROPERTY ENABLE_EXPORTS 1)
-
 # "Unified" v2 Backends
 add_library(gm_backend SHARED
     src/backends/libgm.c
@@ -107,30 +90,3 @@ add_library(vtcapture_backend SHARED
 )
 target_include_directories(vtcapture_backend PRIVATE src src/backends)
 target_link_libraries(vtcapture_backend vtcapture)
-
-# Legacy backends
-add_library(vt_legacy_backend SHARED
-    src/backends/libvt_legacy.c
-)
-target_compile_definitions(vt_legacy_backend PRIVATE CAPTURE_BACKEND)
-target_include_directories(vt_legacy_backend PRIVATE src src/backends)
-target_link_libraries(vt_legacy_backend vt ${GLESv2_LIBRARIES} ${EGL_LIBRARIES})
-
-add_library(vtcapture_legacy_backend SHARED
-    src/backends/libvtcapture_legacy.c
-)
-target_compile_definitions(vtcapture_legacy_backend PRIVATE CAPTURE_BACKEND)
-target_include_directories(vtcapture_legacy_backend PRIVATE src src/backends)
-target_link_libraries(vtcapture_legacy_backend vtcapture halgal yuv)
-
-add_library(dile_vt_legacy_backend SHARED
-    src/backends/libdile_vt_legacy.c
-)
-target_compile_definitions(dile_vt_legacy_backend PRIVATE CAPTURE_BACKEND)
-target_include_directories(dile_vt_legacy_backend PRIVATE src src/backends)
-target_link_libraries(dile_vt_legacy_backend dile_vt yuv)
-
-# libdile_vt.so seems to be missing DT_NEEDED for libPmLogLib.so.3 - let's just
-# add it over to our library. For some reason adding PmLogLib loaded via
-# pkgconfig to target_link_libraries doesn't work...
-set_target_properties(dile_vt_legacy_backend PROPERTIES LINK_FLAGS "-lPmLogLib")
