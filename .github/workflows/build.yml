@@ -57,9 +57,16 @@ jobs:
           ${{github.workspace}}/build/hyperion-webos
           ${{github.workspace}}/build/*.so
 
-
     - uses: DoozyX/clang-format-lint-action@v0.14
       with:
         source: './src'
         extensions: 'c,h,cpp'
         clangFormatVersion: 14
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          ${{github.workspace}}/build/hyperion-webos
+          ${{github.workspace}}/build/*.so
