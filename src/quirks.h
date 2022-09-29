@@ -12,6 +12,12 @@ enum CAPTURE_QUIRKS {
        DILE_VT_SetVideoFrameOutputDeviceOutputRegion
     */
     QUIRK_DILE_VT_DUMP_LOCATION_2 = 0x4,
+    /*  (WebOS 3.x) Destroy DILE_VT driver on stop, so it can
+        be initialized again on TV standby awake. - TV will
+        kill hyperion-webos on standby, so driver is left in
+        memory
+    */
+    QUIRK_DILE_VT_DESTROY_ON_STOP = 0x8,
 
     // vtCapture
     // Reenables video capture using custom kernel module

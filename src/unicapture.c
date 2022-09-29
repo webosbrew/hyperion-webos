@@ -145,10 +145,13 @@ void* unicapture_run(void* data)
 
         if ((now - last_video_start) > 1000000 && video_capture != NULL && !this->video_capture_running) {
             last_video_start = now;
+            int ret;
             DBG("Attempting video capture init...");
-            if (video_capture->start(video_capture->state) == 0) {
+            if ((ret = video_capture->start(video_capture->state)) == 0) {
                 INFO("Video capture started");
                 this->video_capture_running = true;
+            } else if (ret == -99) {
+                this->video_capture_running = false;
             }
         }
 

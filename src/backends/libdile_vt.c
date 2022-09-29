@@ -25,16 +25,23 @@ typedef struct _dile_vt_backend_state {
     uint8_t*** vfbs;
     int mem_fd;
     bool no_freeze_to_acquire_frame;
+    bool create_ex;
+    bool dump_location_2;
+    bool destroy_on_stop;
+    int resolution_height;
+    int resolution_width;
+    int fps;
 } dile_vt_backend_state_t;
 
-int capture_init(cap_backend_config_t* config, void** state_p)
-{
+int dile_init(void* state);
+
+int dile_init(void* state){
     int ret = 0;
+
+    dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
     DILE_VT_HANDLE vth = NULL;
 
-    INFO("Capture start called.");
-
-    if (HAS_QUIRK(config->quirks, QUIRK_DILE_VT_CREATE_EX)) {
+    if (this->create_ex) {
         INFO("[QUIRK_DILE_VT_CREATE_EX]: Attempting DILE_VT_CreateEx...");
         vth = DILE_VT_CreateEx(0, 1);
     } else {
@@ -47,8 +54,6 @@ int capture_init(cap_backend_config_t* config, void** state_p)
         return -1;
     }
 
-    dile_vt_backend_state_t* this = calloc(1, sizeof(dile_vt_backend_state_t));
-    *state_p = this;
     this->vth = vth;
 
     DBG("Got DILE_VT context!");
@@ -65,7 +70,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     DBG("input deinterlace: %d; display deinterlace: %d", limitation.supportInputVideoDeInterlacing, limitation.supportDisplayVideoDeInterlacing);
 
     DILE_VT_DUMP_LOCATION_TYPE_T dump_location;
-    if (HAS_QUIRK(config->quirks, QUIRK_DILE_VT_DUMP_LOCATION_2)) {
+    if (this->dump_location_2) {
         // Quirk for WebOS 3.4 initialization
         INFO("[QUIRK_DILE_VT_DUMP_LOCATION_2]: Attempting UNDOCUMENTED dump location 2...");
         dump_location = 2;
@@ -89,7 +94,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
         }
     }
 
-    DILE_VT_RECT region = { 0, 0, config->resolution_width, config->resolution_height };
+    DILE_VT_RECT region = { 0, 0, this->resolution_width, this->resolution_height };
 
     if (region.width < limitation.scaleDownLimitWidth || region.height < limitation.scaleDownLimitHeight) {
         WARN("scaledown is limited to %dx%d while %dx%d has been chosen - there's a chance this will crash!", limitation.scaleDownLimitWidth, limitation.scaleDownLimitHeight, region.width, region.height);
@@ -109,7 +114,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     // (50/60fps). We don't have any better way of limiting FPS, so let's just
     // average it out - if someone sets their preferred framerate to 30 and
     // content was 50fps, we'll just end up feeding 25 frames per second.
-    this->output_state.framerate = config->fps == 0 ? 1 : 60 / config->fps;
+    this->output_state.framerate = this->fps == 0 ? 1 : 60 / this->fps;
     INFO("[DILE_VT] framerate divider: %d", this->output_state.framerate);
 
     DILE_VT_WaitVsync(vth, 0, 0);
@@ -186,11 +191,6 @@ int capture_init(cap_backend_config_t* config, void** state_p)
         }
     }
 
-    if (HAS_QUIRK(config->quirks, QUIRK_DILE_VT_NO_FREEZE_CAPTURE)) {
-        INFO("[QUIRK_DILE_VT_NO_FREEZE_CAPTURE]: Won't freeze for acquiring frames");
-        this->no_freeze_to_acquire_frame = true;
-    }
-
     return 0;
 
 err_mmap:
@@ -200,6 +200,32 @@ err_mmap:
 err_destroy:
     DILE_VT_Destroy(vth);
     free(this);
+    return ret;
+}
+
+int capture_init(cap_backend_config_t* config, void** state_p)
+{
+    INFO("Capture init called.");
+
+    int ret = 0;
+
+    dile_vt_backend_state_t* this = calloc(1, sizeof(dile_vt_backend_state_t));
+    *state_p = this;
+
+    this->create_ex = HAS_QUIRK(config->quirks, QUIRK_DILE_VT_CREATE_EX);
+    this->destroy_on_stop = HAS_QUIRK(config->quirks, QUIRK_DILE_VT_DESTROY_ON_STOP);
+    
+    if (HAS_QUIRK(config->quirks, QUIRK_DILE_VT_NO_FREEZE_CAPTURE)) {
+        INFO("[QUIRK_DILE_VT_NO_FREEZE_CAPTURE]: Won't freeze for acquiring frames");
+        this->no_freeze_to_acquire_frame = true;
+    }
+
+    this->resolution_height = config->resolution_height;
+    this->resolution_width = config->resolution_width;
+    this->fps = config->fps;
+
+    ret = dile_init(this);
+
     return ret;
 }
 
@@ -214,7 +240,11 @@ int capture_cleanup(void* state)
 int capture_start(void* state)
 {
     dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
-    if (DILE_VT_Start(this->vth) != 0) {
+    if (DILE_VT_Start(this->vth) != 0 && this->destroy_on_stop) {
+        // May need to reinit
+        dile_init(this);
+        return -99;
+    } else {
         return -1;
     }
     return 0;
@@ -223,7 +253,13 @@ int capture_start(void* state)
 int capture_terminate(void* state)
 {
     dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
+
     DILE_VT_Stop(this->vth);
+
+    if (this->destroy_on_stop){
+        DILE_VT_Destroy(this->vth);
+    }
+
     return 0;
 }
 
