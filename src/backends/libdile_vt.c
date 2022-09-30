@@ -240,11 +240,11 @@ int capture_cleanup(void* state)
 int capture_start(void* state)
 {
     dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
-    if (DILE_VT_Start(this->vth) != 0 && this->destroy_on_stop) {
+    if ((ret = DILE_VT_Start(this->vth) != 0) && this->destroy_on_stop) {
         // May need to reinit
         dile_init(this);
         return -99;
-    } else {
+    } else if (ret != 0) {
         return -1;
     }
     return 0;
