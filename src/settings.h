@@ -28,6 +28,9 @@ typedef struct _settings_t {
     bool autostart;
 
     bool dump_frames;
+
+    bool no_hdr;
+    bool no_powerstate;
 } settings_t;
 
 void settings_init(settings_t*);

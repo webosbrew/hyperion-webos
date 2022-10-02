@@ -21,6 +21,9 @@ void settings_init(settings_t* settings)
     settings->autostart = false;
     settings->vsync = true;
 
+    settings->no_hdr = false;
+    settings->no_powerstate = false;
+
     settings->dump_frames = false;
 }
 
@@ -73,6 +76,11 @@ int settings_load_json(settings_t* settings, jvalue_ref source)
     if ((value = jobject_get(source, j_cstr_to_buffer("autostart"))) && jis_boolean(value))
         jboolean_get(value, &settings->autostart);
 
+    if ((value = jobject_get(source, j_cstr_to_buffer("nohdr"))) && jis_boolean(value))
+        jboolean_get(value, &settings->no_hdr);
+    if ((value = jobject_get(source, j_cstr_to_buffer("nopowerstate"))) && jis_boolean(value))
+        jboolean_get(value, &settings->no_powerstate);
+
     return 0;
 }
 
@@ -95,6 +103,9 @@ int settings_save_json(settings_t* settings, jvalue_ref target)
     jobject_set(target, j_cstr_to_buffer("novideo"), jboolean_create(settings->no_video));
     jobject_set(target, j_cstr_to_buffer("nogui"), jboolean_create(settings->no_gui));
     jobject_set(target, j_cstr_to_buffer("autostart"), jboolean_create(settings->autostart));
+
+    jobject_set(target, j_cstr_to_buffer("nohdr"), jboolean_create(settings->no_hdr));
+    jobject_set(target, j_cstr_to_buffer("nopowerstate"), jboolean_create(settings->no_powerstate));
 
     return 0;
 }

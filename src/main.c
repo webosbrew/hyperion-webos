@@ -29,6 +29,8 @@ static struct option long_options[] = {
     { "no-video", no_argument, 0, 'V' },
     { "no-gui", no_argument, 0, 'G' },
     { "no-vsync", no_argument, 0, 'n' },
+    { "no-hdr", no_argument, 0, 'r' },
+    { "no-powerstate", no_argument, 0, 's' },
     { "backend", required_argument, 0, 'b' },
     { "ui-backend", required_argument, 0, 'u' },
     { "quirks", required_argument, 0, 'q' },
@@ -58,6 +60,8 @@ static void print_usage()
     printf("  -V, --no-video        Video will not be captured\n");
     printf("  -G, --no-gui          GUI/UI will not be captured\n");
     printf("  -n, --no-vsync        Disable vsync (may increase framerate at the cost of tearing/artifacts)\n");
+    printf("  -r, --no-hdr          Disable automatic HDR mode switching\n");
+    printf("  -s, --no-powerstate   Disable automatic powerstate switching\n");
     printf("  -q, --quirks=QUIRKS   Enable certain handling for per-device quirks\n");
     printf("  -c, --config=PATH     Absolute path for configfile to load settings. Giving additional runtime arguments will overwrite loaded ones.\n");
     printf("  -d, --dump-frames     Dump raw video frames to /tmp/.\n");
@@ -72,7 +76,7 @@ static int parse_options(int argc, char* argv[])
     int opt, longindex;
     int ret;
 
-    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:q:c:lvnhdVG", long_options, &longindex)) != -1) {
+    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:q:c:lvnhdVGrs", long_options, &longindex)) != -1) {
         switch (opt) {
         case 'x':
             settings.width = atoi(optarg);
@@ -98,6 +102,12 @@ static int parse_options(int argc, char* argv[])
             break;
         case 'G':
             settings.no_gui = 1;
+            break;
+        case 's':
+            settings.no_powerstate = 1;
+            break;
+        case 'r':
+            settings.no_hdr = 1;
             break;
         case 'n':
             settings.vsync = false;
