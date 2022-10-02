@@ -35,7 +35,8 @@ typedef struct _dile_vt_backend_state {
 
 int dile_init(void* state);
 
-int dile_init(void* state){
+int dile_init(void* state)
+{
     int ret = 0;
 
     dile_vt_backend_state_t* this = (dile_vt_backend_state_t*)state;
@@ -214,7 +215,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 
     this->create_ex = HAS_QUIRK(config->quirks, QUIRK_DILE_VT_CREATE_EX);
     this->destroy_on_stop = HAS_QUIRK(config->quirks, QUIRK_DILE_VT_DESTROY_ON_STOP);
-    
+
     if (HAS_QUIRK(config->quirks, QUIRK_DILE_VT_NO_FREEZE_CAPTURE)) {
         INFO("[QUIRK_DILE_VT_NO_FREEZE_CAPTURE]: Won't freeze for acquiring frames");
         this->no_freeze_to_acquire_frame = true;
@@ -257,7 +258,7 @@ int capture_terminate(void* state)
 
     DILE_VT_Stop(this->vth);
 
-    if (this->destroy_on_stop){
+    if (this->destroy_on_stop) {
         DILE_VT_Destroy(this->vth);
     }
 
