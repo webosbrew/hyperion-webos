@@ -36,7 +36,6 @@ int hyperion_client(const char* origin, const char* hostname, int port, bool uni
     _registered = false;
     sockfd = 0;
 
-
     if (unix_socket) {
         return _connect_unix_socket(hostname);
     } else {
@@ -181,14 +180,14 @@ int _connect_inet_socket(const char* hostname, int port)
     timeout.tv_usec = 0;
 
     if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout,
-                   sizeof(timeout))
+            sizeof(timeout))
         < 0) {
         WARN("setsockopt(SO_SNDTIMEO) failed: %s", strerror(errno));
         return 1;
     }
 
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout,
-                   sizeof(timeout))
+            sizeof(timeout))
         < 0) {
         WARN("setsockopt(SO_RCVTIMEO) failed: %s", strerror(errno));
         return 1;
@@ -226,14 +225,15 @@ int _connect_unix_socket(const char* hostname)
     timeout.tv_usec = 0;
 
     if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout,
-                   sizeof(timeout))
+            sizeof(timeout))
         < 0) {
         WARN("setsockopt(SO_SNDTIMEO) failed: %s", strerror(errno));
         return 1;
     }
 
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout,
-                   sizeof(timeout)) < 0) {
+            sizeof(timeout))
+        < 0) {
         WARN("setsockopt(SO_RCVTIMEO) failed: %s", strerror(errno));
         return 1;
     }
