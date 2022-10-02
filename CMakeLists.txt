@@ -3,7 +3,7 @@ project(hyperion-webos VERSION 1.0 LANGUAGES C CXX)
 
 set(_cflags_list "")
 list(APPEND _cflags_list
-    -mcpu=cortex-a9 -mfloat-abi=softfp -mfpu=neon-fp16
+    -mcpu=cortex-a9 -mfloat-abi=softfp -mfpu=neon
 )
 list(JOIN _cflags_list " " COMMON_FLAGS)
 
