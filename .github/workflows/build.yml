@@ -3,6 +3,12 @@ name: Build
 on:
   push:
 
+env:
+  TOOLCHAIN_URL: https://github.com/openlgtv/buildroot-nc4/releases/download/webos-c592d84/arm-webos-linux-gnueabi_sdk-buildroot.tar.gz
+  TOOLCHAIN_SHA256: be5b4249177fc31b3f0120106c761f42ade54fd609a3bd090852899bbdd680b9
+  TOOLCHAIN_DIR: /opt/arm-webos-linux-gnueabi_sdk-buildroot
+  TOOLCHAIN_FILE: /opt/arm-webos-linux-gnueabi_sdk-buildroot/share/buildroot/toolchainfile.cmake
+
 jobs:
   build-native-component:
     strategy:
@@ -17,14 +23,22 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Download webOS NDK
-      run: wget -q https://github.com/webosbrew/meta-lg-webos-ndk/releases/download/1.0.g-rev.5/webos-sdk-x86_64-armv7a-neon-toolchain-1.0.g.sh -P ${{github.workspace}}/temp
+    - name: Download and unpack toolchain
+      working-directory: /opt
+      run: |
+        wget -q -O toolchain.tar.gz ${TOOLCHAIN_URL}
+        echo "${TOOLCHAIN_SHA256} toolchain.tar.gz"|sha256sum -c -
+        tar xf toolchain.tar.gz
 
-    - name: Install webOS NDK
-      run: chmod 755 ${{github.workspace}}/temp/webos-sdk-x86_64-armv7a-neon-toolchain-1.0.g.sh && sudo ${{github.workspace}}/temp/webos-sdk-x86_64-armv7a-neon-toolchain-1.0.g.sh -y
+    - name: Relocate toolchain
+      working-directory: ${{ env.TOOLCHAIN_DIR }}
+      run: |
+        ./relocate-sdk.sh
 
-    - name: Initialize NDK Environments
-      run: env -i bash -c '. /opt/webos-sdk-x86_64/1.0.g/environment-setup-armv7a-neon-webos-linux-gnueabi && env' >> $GITHUB_ENV
+    - name: Set environment
+      run: |
+        env -i bash -c 'CFLAGS="$CFLAGS -mfpu=neon " && env' >> $GITHUB_ENV
+        echo $GITHUB_ENV
 
     - name: CMake Version
       run: cmake --version
@@ -35,7 +49,7 @@ jobs:
     - name: Build component
       working-directory: ${{github.workspace}}/build
       shell: bash
-      run: cmake -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} .. && make hyperion-webos gm_backend halgal_backend dile_vt_backend vtcapture_backend
+      run: cmake -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DLIBYUV_NEON .. && make hyperion-webos gm_backend halgal_backend dile_vt_backend vtcapture_backend
 
     - name: List files
       run: find .
