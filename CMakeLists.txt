@@ -1,9 +1,17 @@
 cmake_minimum_required(VERSION 3.6)
 project(hyperion-webos VERSION 1.0 LANGUAGES C CXX)
 
+set(_cflags_list "")
+list(APPEND _cflags_list
+    -mcpu=cortex-a9 -mfloat-abi=softfp -mfpu=neon-fp16
+)
+list(JOIN _cflags_list " " COMMON_FLAGS)
+
 add_subdirectory(libyuv)
 add_subdirectory(tv-native-apis)
 add_subdirectory(flatccrt)
+
+add_compile_options(${_cflags_list} -Wall -Wextra -Wpedantic -Werror -DSECURITY_COMPATIBILITY)
 
 find_package(PkgConfig REQUIRED)
 
@@ -36,7 +44,6 @@ add_custom_target(version
                    -P ${CMAKE_SOURCE_DIR}/GenerateVersionHeader.cmake
 )
 
-add_compile_options(-Wall -Wextra -Wpedantic -Werror -DSECURITY_COMPATIBILITY)
 add_executable(hyperion-webos
     src/main.c
     src/settings.c
