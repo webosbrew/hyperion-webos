@@ -36,7 +36,7 @@ add_custom_target(version
                    -P ${CMAKE_SOURCE_DIR}/GenerateVersionHeader.cmake
 )
 
-add_compile_options(-Wall -Wextra -Wpedantic -Werror -DSECURITY_COMPATIBILITY)
+add_compile_options(-Wall -Wextra -Wpedantic -Werror -DSECURITY_COMPATIBILITY -mfpu=neon -DLIBYUV_NEON)
 add_executable(hyperion-webos
     src/main.c
     src/settings.c

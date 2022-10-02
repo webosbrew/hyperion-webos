@@ -35,11 +35,6 @@ jobs:
       run: |
         ./relocate-sdk.sh
 
-    - name: Set environment
-      run: |
-        env -i bash -c 'CFLAGS="$CFLAGS -mfpu=neon " && env' >> $GITHUB_ENV
-        echo $GITHUB_ENV
-
     - name: CMake Version
       run: cmake --version
 
