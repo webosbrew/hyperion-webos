@@ -28,7 +28,8 @@ void* connection_loop(void* data)
     DBG("Starting connection loop");
     while (service->connection_loop_running) {
         INFO("Connecting hyperion-client..");
-        if ((hyperion_client("webos", service->settings->address, service->settings->port, service->settings->priority)) != 0) {
+        if ((hyperion_client("webos", service->settings->address, service->settings->port,
+                             service->settings->unix_socket, service->settings->priority)) != 0) {
             ERR("Error! hyperion_client.");
         } else {
             INFO("hyperion-client connected!");
@@ -407,7 +408,7 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
         hdr_enabled = true;
     }
 
-    int ret = set_hdr_state(service->settings->address, RPC_PORT, hdr_enabled);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, hdr_enabled);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }
@@ -459,7 +460,7 @@ static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* ms
         hdr_enabled = true;
     }
 
-    int ret = set_hdr_state(service->settings->address, RPC_PORT, hdr_enabled);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, hdr_enabled);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }

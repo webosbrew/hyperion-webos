@@ -24,6 +24,7 @@ static struct option long_options[] = {
     { "height", required_argument, 0, 'y' },
     { "address", required_argument, 0, 'a' },
     { "port", required_argument, 0, 'p' },
+    { "unix-socket", no_argument, 0, 'l' },
     { "fps", required_argument, 0, 'f' },
     { "no-video", no_argument, 0, 'V' },
     { "no-gui", no_argument, 0, 'G' },
@@ -50,6 +51,7 @@ static void print_usage()
     printf("  -y, --height=HEIGHT   Height of video frame (default 108)\n");
     printf("  -a, --address=ADDR    IP address of Hyperion server\n");
     printf("  -p, --port=PORT       Port of Hyperion flatbuffers server (default 19400)\n");
+    printf("  -l, --unix-socket     Connect through unix socket\n");
     printf("  -f, --fps=FPS         Framerate for sending video frames (default 0 = unlimited)\n");
     printf("  -b, --backend=BE      Use specific video capture backend (default auto)\n");
     printf("  -u, --ui-backend=BE   Use specific ui capture backend (default auto)\n");
@@ -70,7 +72,7 @@ static int parse_options(int argc, char* argv[])
     int opt, longindex;
     int ret;
 
-    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:q:c:vnhdVG", long_options, &longindex)) != -1) {
+    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:q:c:lvnhdVG", long_options, &longindex)) != -1) {
         switch (opt) {
         case 'x':
             settings.width = atoi(optarg);
@@ -84,6 +86,9 @@ static int parse_options(int argc, char* argv[])
             break;
         case 'p':
             settings.port = atol(optarg);
+            break;
+        case 'l':
+            settings.unix_socket = true;
             break;
         case 'f':
             settings.fps = atoi(optarg);

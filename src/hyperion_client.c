@@ -10,11 +10,14 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include "hyperion_reply_reader.h"
 #include "hyperion_request_builder.h"
 
+static int _connect_unix_socket(const char* hostname);
+static int _connect_inet_socket(const char* hostname, int port);
 static int _send_message(const void* buffer, size_t size);
 static bool _parse_reply(hyperionnet_Reply_table_t reply);
 
@@ -25,53 +28,20 @@ static const char* _origin = NULL;
 static bool _connected = false;
 unsigned char recvBuff[1024];
 
-int hyperion_client(const char* origin, const char* hostname, int port, int priority)
+int hyperion_client(const char* origin, const char* hostname, int port, bool unix_socket, int priority)
 {
     _origin = origin;
     _priority = priority;
     _connected = false;
     _registered = false;
     sockfd = 0;
-    struct sockaddr_in serv_addr;
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        WARN("Could not create socket: %s", strerror(errno));
-        return 1;
+
+
+    if (unix_socket) {
+        return _connect_unix_socket(hostname);
+    } else {
+        return _connect_inet_socket(hostname, port);
     }
-    struct timeval timeout;
-    timeout.tv_sec = 1;
-    timeout.tv_usec = 0;
-
-    if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout,
-            sizeof(timeout))
-        < 0) {
-        WARN("setsockopt(SO_SNDTIMEO) failed: %s", strerror(errno));
-        return 1;
-    }
-
-    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout,
-            sizeof(timeout))
-        < 0) {
-        WARN("setsockopt(SO_RCVTIMEO) failed: %s", strerror(errno));
-        return 1;
-    }
-
-    memset(&serv_addr, '0', sizeof(serv_addr));
-
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
-
-    if (inet_pton(AF_INET, hostname, &serv_addr.sin_addr) <= 0) {
-        WARN("inet_pton error occured (hostname: %s): %s", hostname, strerror(errno));
-        return 1;
-    }
-
-    if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-        WARN("connect() to %s:%d failed: %s", hostname, port, strerror(errno));
-        return 1;
-    }
-    _connected = true;
-
-    return 0;
 }
 
 int hyperion_read()
@@ -196,4 +166,88 @@ bool _parse_reply(hyperionnet_Reply_table_t reply)
     }
 
     return false;
+}
+
+int _connect_inet_socket(const char* hostname, int port)
+{
+    struct sockaddr_in serv_addr_in;
+
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        WARN("Could not create socket: %s", strerror(errno));
+        return 1;
+    }
+    struct timeval timeout;
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout,
+                   sizeof(timeout))
+        < 0) {
+        WARN("setsockopt(SO_SNDTIMEO) failed: %s", strerror(errno));
+        return 1;
+    }
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout,
+                   sizeof(timeout))
+        < 0) {
+        WARN("setsockopt(SO_RCVTIMEO) failed: %s", strerror(errno));
+        return 1;
+    }
+
+    memset(&serv_addr_in, 0, sizeof(serv_addr_in));
+
+    serv_addr_in.sin_family = AF_INET;
+    serv_addr_in.sin_port = htons(port);
+
+    if (inet_pton(AF_INET, hostname, &serv_addr_in.sin_addr) <= 0) {
+        WARN("inet_pton error occured (hostname: %s): %s", hostname, strerror(errno));
+        return 1;
+    }
+
+    if (connect(sockfd, (struct sockaddr*)&serv_addr_in, sizeof(serv_addr_in)) < 0) {
+        WARN("connect() to %s:%d failed: %s", hostname, port, strerror(errno));
+        return 1;
+    }
+    _connected = true;
+
+    return 0;
+}
+
+int _connect_unix_socket(const char* hostname)
+{
+    struct sockaddr_un serv_addr_un;
+
+    if ((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+        WARN("Could not create socket: %s", strerror(errno));
+        return 1;
+    }
+    struct timeval timeout;
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout,
+                   sizeof(timeout))
+        < 0) {
+        WARN("setsockopt(SO_SNDTIMEO) failed: %s", strerror(errno));
+        return 1;
+    }
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout,
+                   sizeof(timeout)) < 0) {
+        WARN("setsockopt(SO_RCVTIMEO) failed: %s", strerror(errno));
+        return 1;
+    }
+
+    memset(&serv_addr_un, 0, sizeof(serv_addr_un));
+
+    serv_addr_un.sun_family = AF_LOCAL;
+    strcpy(serv_addr_un.sun_path, hostname);
+
+    if (connect(sockfd, (struct sockaddr*)&serv_addr_un, sizeof(serv_addr_un)) < 0) {
+        WARN("connect() to unix socket %s failed: %s", hostname, strerror(errno));
+        return 1;
+    }
+    _connected = true;
+
+    return 0;
 }
