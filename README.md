@@ -53,6 +53,7 @@ Currently the following ones exist:
 | DILE_VT   | QUIRK_DILE_VT_CREATE_EX | Use `DILE_VT_CreateEx` instead of `DILE_VT_Create`  | 0x1  |
 | DILE_VT   | QUIRK_DILE_VT_NO_FREEZE_CAPTURE | Do not freeze frame before capturing (higher fps) | 0x2 |
 | DILE_VT   | QUIRK_DILE_VT_DUMP_LOCATION_2   | (webOS 3.4) Use undocumented dump location 2 | 0x4  |
+| DILE_VT   | QUIRK_DILE_VT_DESTROY_ON_STOP   | (webOS 3.4) Destroy driver on stop | 0x8  |
 | VTCAPTURE   | QUIRK_VTCAPTURE_FORCE_CAPTURE   | Use of a custom kernel module for reenable capture in special situation | 0x100  |
 
 
