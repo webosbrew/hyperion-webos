@@ -3,6 +3,7 @@ include(ExternalProject)
 ExternalProject_Add(
   libyuv
   URL https://chromium.googlesource.com/libyuv/libyuv/+archive/fdc71956bdade0012b0628b5011b567c06c72308.tar.gz
+  DOWNLOAD_COMMAND wget https://chromium.googlesource.com/libyuv/libyuv/+archive/fdc71956bdade0012b0628b5011b567c06c72308.tar.gz -O - | tar xz -C <DOWNLOAD_DIR>/libyuv
   CMAKE_ARGS
     -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     -DCMAKE_C_FLAGS=${COMMON_FLAGS}
