@@ -78,6 +78,8 @@ int service_init(service_t* service, settings_t* settings)
     service->unicapture.callback_data = (void*)service;
     service->unicapture.dump_frames = settings->dump_frames;
 
+    unicapture_load_lut_table(&service->unicapture, settings->lut_table);
+
     service_init_backends(service);
 
     return 0;

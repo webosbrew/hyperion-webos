@@ -22,6 +22,8 @@ typedef struct _settings_t {
     bool vsync;
     int quirks;
 
+    char* lut_table;
+
     bool no_video;
     bool no_gui;
 

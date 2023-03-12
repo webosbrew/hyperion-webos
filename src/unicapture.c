@@ -9,6 +9,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#define LUT_INDEX(y, u, v) ((y + (u << 8) + (v << 16)) * 3)
+#define LUT_FILE_SIZE 256 * 256 * 256 * 3
+
 #define DLSYM_ERROR_CHECK()                         \
     if ((error = dlerror()) != NULL) {              \
         ERR("Error! dlsym failed, msg: %s", error); \
@@ -189,6 +192,17 @@ void* unicapture_run(void* data)
 
         if (video_frame.pixel_format != PIXFMT_INVALID) {
             converter_run(&video_converter, &video_frame, &video_frame_converted, PIXFMT_ARGB);
+
+            if (this->lut_table != NULL) {
+                for (int i = 0; i < video_frame_converted.width * video_frame_converted.height * 4; i += 4) {
+                    // This is somehow RGBA instead of the supposed ARGB
+                    uint8_t r = ((uint8_t*)(video_frame_converted.planes[0].buffer))[i + 0];
+                    uint8_t g = ((uint8_t*)(video_frame_converted.planes[0].buffer))[i + 1];
+                    uint8_t b = ((uint8_t*)(video_frame_converted.planes[0].buffer))[i + 2];
+
+                    memcpy(&((uint8_t*)video_frame_converted.planes[0].buffer)[i + 0], &this->lut_table[LUT_INDEX(r, g, b)], 3);
+                }
+            }
         }
 
         uint64_t frame_converted = getticks_us();
@@ -339,6 +353,52 @@ void unicapture_init(unicapture_state_t* this)
 {
     memset(this, 0, sizeof(unicapture_state_t));
     this->vsync = true;
+    this->lut_table = NULL;
+}
+
+int unicapture_load_lut_table(unicapture_state_t* this, char* lut_table_file)
+{
+    if (this->lut_table) {
+        free(this->lut_table);
+    }
+    this->lut_table = NULL;
+
+    if (strcmp(lut_table_file, "") == 0) {
+        return 1;
+    }
+
+    FILE* file = fopen(lut_table_file, "r");
+
+    if (!file) {
+        INFO("LUT file could not be read: %s", lut_table_file);
+        return 1;
+    }
+
+    size_t length;
+    INFO("LUT file read: %s", lut_table_file);
+
+    fseek(file, 0, SEEK_END);
+    length = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    if (length != LUT_FILE_SIZE) {
+        ERR("LUT file has invalid length: %i", length);
+        fclose(file);
+        return 1;
+    }
+
+    this->lut_table = (unsigned char*)malloc(length + 1);
+    if (fread(this->lut_table, 1, length, file) != length) {
+        free(this->lut_table);
+        this->lut_table = NULL;
+        ERR("Error reading LUT file");
+        fclose(file);
+        return 1;
+    }
+
+    INFO("LUT file has been loaded");
+
+    return 0;
 }
 
 int unicapture_start(unicapture_state_t* this)
