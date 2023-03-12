@@ -69,12 +69,6 @@ int service_feed_frame(void* data __attribute__((unused)), int width, int height
 
 int service_init(service_t* service, settings_t* settings)
 {
-    cap_backend_config_t config;
-    config.resolution_width = settings->width;
-    config.resolution_height = settings->height;
-    config.fps = settings->fps;
-    config.quirks = settings->quirks;
-
     service->settings = settings;
 
     unicapture_init(&service->unicapture);
@@ -86,47 +80,83 @@ int service_init(service_t* service, settings_t* settings)
 
     unicapture_load_lut_table(&service->unicapture, settings->lut_table);
 
+    service_init_backends(service);
+
+    return 0;
+}
+
+void service_init_backends(service_t* service)
+{
+    settings_t* settings = service->settings;
+
+    cap_backend_config_t config;
+    config.resolution_width = settings->width;
+    config.resolution_height = settings->height;
+    config.fps = settings->fps;
+    config.quirks = settings->quirks;
+
     char* ui_backends[] = { "libgm_backend.so", "libhalgal_backend.so", NULL };
     char* video_backends[] = { "libvtcapture_backend.so", "libdile_vt_backend.so", NULL };
     char backend_name[FILENAME_MAX] = { 0 };
 
-    service->unicapture.ui_capture = NULL;
+    if (!service->ui_backend_initialized) {
+        service->unicapture.ui_capture = NULL;
 
-    if (settings->no_gui) {
-        INFO("UI capture disabled");
-    } else {
-        if (settings->ui_backend == NULL || strcmp(settings->ui_backend, "") == 0 || strcmp(settings->ui_backend, "auto") == 0) {
-            INFO("Autodetecting UI backend...");
-            if (unicapture_try_backends(&config, &service->ui_backend, ui_backends) == 0) {
-                service->unicapture.ui_capture = &service->ui_backend;
-            }
+        if (settings->no_gui) {
+            INFO("UI capture disabled");
         } else {
-            snprintf(backend_name, sizeof(backend_name), "%s_backend.so", settings->ui_backend);
-            if (unicapture_init_backend(&config, &service->ui_backend, backend_name) == 0) {
-                service->unicapture.ui_capture = &service->ui_backend;
+            if (settings->ui_backend == NULL || strcmp(settings->ui_backend, "") == 0 || strcmp(settings->ui_backend, "auto") == 0) {
+                INFO("Autodetecting UI backend...");
+                if (unicapture_try_backends(&config, &service->ui_backend, ui_backends) == 0) {
+                    service->unicapture.ui_capture = &service->ui_backend;
+                    service->ui_backend_initialized = true;
+                }
+            } else {
+                snprintf(backend_name, sizeof(backend_name), "%s_backend.so", settings->ui_backend);
+                if (unicapture_init_backend(&config, &service->ui_backend, backend_name) == 0) {
+                    service->unicapture.ui_capture = &service->ui_backend;
+                    service->ui_backend_initialized = true;
+                }
             }
         }
     }
 
-    service->unicapture.video_capture = NULL;
+    if (!service->video_backend_initialized) {
+        service->unicapture.video_capture = NULL;
 
-    if (settings->no_video) {
-        INFO("Video capture disabled");
-    } else {
-        if (settings->video_backend == NULL || strcmp(settings->video_backend, "") == 0 || strcmp(settings->video_backend, "auto") == 0) {
-            INFO("Autodetecting video backend...");
-            if (unicapture_try_backends(&config, &service->video_backend, video_backends) == 0) {
-                service->unicapture.video_capture = &service->video_backend;
-            }
+        if (settings->no_video) {
+            INFO("Video capture disabled");
         } else {
-            snprintf(backend_name, sizeof(backend_name), "%s_backend.so", settings->video_backend);
-            if (unicapture_init_backend(&config, &service->video_backend, backend_name) == 0) {
-                service->unicapture.video_capture = &service->video_backend;
+            if (settings->video_backend == NULL || strcmp(settings->video_backend, "") == 0 || strcmp(settings->video_backend, "auto") == 0) {
+                INFO("Autodetecting video backend...");
+                if (unicapture_try_backends(&config, &service->video_backend, video_backends) == 0) {
+                    service->unicapture.video_capture = &service->video_backend;
+                    service->video_backend_initialized = true;
+                }
+            } else {
+                snprintf(backend_name, sizeof(backend_name), "%s_backend.so", settings->video_backend);
+                if (unicapture_init_backend(&config, &service->video_backend, backend_name) == 0) {
+                    service->unicapture.video_capture = &service->video_backend;
+                    service->video_backend_initialized = true;
+                }
             }
         }
     }
+}
 
-    return 0;
+void service_destroy_backends(service_t* service)
+{
+    if (service->ui_backend_initialized && service->ui_backend.cleanup) {
+        DBG("Cleaning up UI backend...");
+        DBG("Result: %d", service->ui_backend.cleanup(service->ui_backend.state));
+        service->ui_backend_initialized = false;
+    }
+
+    if (service->video_backend_initialized && service->video_backend.cleanup) {
+        DBG("Cleaning up video backend...");
+        DBG("Result: %d", service->video_backend.cleanup(service->video_backend.state));
+        service->video_backend_initialized = false;
+    }
 }
 
 int service_destroy(service_t* service)
@@ -140,6 +170,8 @@ int service_start(service_t* service)
     if (service->running) {
         return 1;
     }
+
+    service_init_backends(service);
 
     service->running = true;
     int res = unicapture_start(&service->unicapture);
@@ -169,6 +201,8 @@ int service_stop(service_t* service)
     unicapture_stop(&service->unicapture);
     pthread_join(service->connection_thread, NULL);
     service->running = false;
+
+    service_destroy_backends(service);
 
     return 0;
 }
