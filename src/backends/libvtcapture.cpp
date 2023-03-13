@@ -52,7 +52,28 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 
     // Sorry, no unlimited fps for you.
     self->props.frm = config->fps == 0 ? 60 : config->fps;
-    self->props.dump = 2;
+    /*
+     * 1. V4L2_EXT_CAPTURE_SCALER_INPUT
+     *   - LG uses this location only when VTV mode.
+     *   - If not supported, the ioctl should be returned -1 and the errno variable should be set to ENOTSUP.
+     * 2. V4L2_EXT_CAPTURE_SCALER_OUTPUT
+     *   - Recommend location
+     *      - Before PQ processing, after de-interlace block
+     *      - The frame is a progressive type.
+     *   - Alternative location due to chip limitation
+     *      - Before PQ processing, before de-interlace block
+     *      - The frame is an interlace type.
+     * 3. V4L2_EXT_CAPTURE_DISPLAY_OUTPUT
+     *   - Capture a video after PQ processing and before OSD blending.
+     *   - The frame size calculated with ARC applied.
+     * 4. V4L2_EXT_CAPTURE_BLENDED_OUTPUT
+     *   - Capture a video after OSD blending.
+     *   - If not supported, the ioctl should be returned -1 and the errno variable should be set to ENOTSUP.
+     * 5. V4L2_EXT_CAPTURE_OSD_OUTPUT
+     *   - Capture a OSD output.
+     *   - If not supported, the ioctl should be returned -1 and the errno variable should be set to ENOTSUP.
+     */
+    self->props.dump = HAS_QUIRK(config->quirks, QUIRK_VTCAPTURE_DUMP_LOCATION_1) ? 1 : 2;
     self->props.loc.x = 0;
     self->props.loc.y = 0;
     self->props.reg.w = config->resolution_width;

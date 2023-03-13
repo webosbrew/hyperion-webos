@@ -54,6 +54,7 @@ Currently the following ones exist:
 | DILE_VT   | QUIRK_DILE_VT_NO_FREEZE_CAPTURE | Do not freeze frame before capturing (higher fps) | 0x2 |
 | DILE_VT   | QUIRK_DILE_VT_DUMP_LOCATION_2   | (webOS 3.4) Use undocumented dump location 2 | 0x4  |
 | VTCAPTURE   | QUIRK_VTCAPTURE_FORCE_CAPTURE   | Use of a custom kernel module for reenable capture in special situation | 0x100  |
+| VTCAPTURE   | QUIRK_VTCAPTURE_DUMP_LOCATION_1   | Use undocumented dump location 1, may provide better colors on some models | 0x200  |
 
 
 They can be provided in `config.json` via the `{"quirks": 0}` field or on commandline via `--quirks`.
