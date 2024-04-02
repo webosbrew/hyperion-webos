@@ -128,7 +128,7 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
         return ret;
     }
 
-    frame->pixel_format = PIXFMT_ABGR;
+    frame->pixel_format = PIXFMT_ARGB;
     frame->width = this->width;
     frame->height = this->height;
     frame->planes[0].buffer = this->mem_addr;
