@@ -214,7 +214,7 @@ void* unicapture_run(void* data)
                 4 * width,
                 width,
                 height);
-            ARGBToRGB24(
+            ARGBToRAW(
                 blended_frame,
                 4 * width,
                 final_frame,
@@ -227,7 +227,7 @@ void* unicapture_run(void* data)
 
             final_frame = realloc(final_frame, width * height * 3);
 
-            ARGBToRGB24(
+            ARGBToRAW(
                 ui_frame_converted.planes[0].buffer,
                 ui_frame_converted.planes[0].stride,
                 final_frame,
@@ -240,7 +240,7 @@ void* unicapture_run(void* data)
 
             final_frame = realloc(final_frame, width * height * 3);
 
-            ARGBToRGB24(
+            ARGBToRAW(
                 video_frame_converted.planes[0].buffer,
                 video_frame_converted.planes[0].stride,
                 final_frame,

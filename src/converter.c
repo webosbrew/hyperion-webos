@@ -36,7 +36,7 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
         output->planes[0].stride = output->width * 4;
 
         if (input->pixel_format == PIXFMT_RGB) {
-            RGB24ToARGB(
+            RAWToARGB(
                 input->planes[0].buffer,
                 input->planes[0].stride,
                 output->planes[0].buffer,
@@ -52,7 +52,7 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
                 output->width,
                 output->height);
         } else if (input->pixel_format == PIXFMT_YUV420_SEMI_PLANAR) {
-            NV21ToARGB(
+            NV12ToARGB(
                 input->planes[0].buffer,
                 input->planes[0].stride,
                 input->planes[1].buffer,
@@ -84,6 +84,9 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
                 output->planes[0].stride,
                 output->width,
                 output->height);
+        } else if (input->pixel_format == PIXFMT_ARGB) {
+            output->planes[0].buffer = input->planes[0].buffer;
+            output->planes[0].stride = input->planes[0].stride;
         } else {
             return -2;
         }

@@ -65,13 +65,14 @@ int send_rpc_message(char* host, ushort rpc_port, jvalue_ref post_body_jval, jva
     JSchemaInfo schema;
 
     char* url = (char*)calloc(1, PATH_MAX);
+    char* response = (char*)calloc(1, MAX_RESPONSE_BUF_SZ);
+
     if (url == NULL) {
         ERR("send_rpc_message: alloc failed -> url");
         ret = -1;
         goto exit;
     }
 
-    char* response = (char*)calloc(1, MAX_RESPONSE_BUF_SZ);
     if (response == NULL) {
         ERR("send_rpc_message: alloc failed -> response");
         ret = -2;

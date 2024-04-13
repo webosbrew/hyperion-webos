@@ -49,7 +49,7 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
         return ret;
     }
 
-    frame->pixel_format = PIXFMT_ABGR;
+    frame->pixel_format = PIXFMT_ARGB;
     frame->width = width;
     frame->height = height;
     frame->planes[0].buffer = this->surface_info.framebuffer;
