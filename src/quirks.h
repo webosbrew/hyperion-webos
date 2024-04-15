@@ -11,7 +11,7 @@ enum CAPTURE_QUIRKS {
        DILE_VT_SetVideoFrameOutputDeviceDumpLocation and
        DILE_VT_SetVideoFrameOutputDeviceOutputRegion
     */
-    QUIRK_DILE_VT_DUMP_LOCATION_2 = 0x4,
+    QUIRK_ALTERNATIVE_DUMP_LOCATION = 0x4,
 
     // vtCapture
     // Reenables video capture using custom kernel module

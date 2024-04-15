@@ -65,7 +65,7 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     DBG("input deinterlace: %d; display deinterlace: %d", limitation.supportInputVideoDeInterlacing, limitation.supportDisplayVideoDeInterlacing);
 
     DILE_VT_DUMP_LOCATION_TYPE_T dump_location;
-    if (HAS_QUIRK(config->quirks, QUIRK_DILE_VT_DUMP_LOCATION_2)) {
+    if (HAS_QUIRK(config->quirks, QUIRK_ALTERNATIVE_DUMP_LOCATION)) {
         // Quirk for WebOS 3.4 initialization
         INFO("[QUIRK_DILE_VT_DUMP_LOCATION_2]: Attempting UNDOCUMENTED dump location 2...");
         dump_location = 2;

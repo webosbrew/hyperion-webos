@@ -48,12 +48,12 @@ In this case, to not need totally different binaries, we implemented *quirks*, w
 
 Currently the following ones exist:
 
-| Backend   | Quirk                   | Description                                         | Flag |
-| --------- | ----------------------- | --------------------------------------------------- | ---- |
-| DILE_VT   | QUIRK_DILE_VT_CREATE_EX | Use `DILE_VT_CreateEx` instead of `DILE_VT_Create`  | 0x1  |
-| DILE_VT   | QUIRK_DILE_VT_NO_FREEZE_CAPTURE | Do not freeze frame before capturing (higher fps) | 0x2 |
-| DILE_VT   | QUIRK_DILE_VT_DUMP_LOCATION_2   | (webOS 3.4) Use undocumented dump location 2 | 0x4  |
-| VTCAPTURE   | QUIRK_VTCAPTURE_FORCE_CAPTURE   | Use of a custom kernel module for reenable capture in special situation | 0x100  |
+| Backend           | Quirk                           | Description                                                             | Flag  |
+|-------------------|---------------------------------|-------------------------------------------------------------------------|-------|
+| DILE_VT           | QUIRK_DILE_VT_CREATE_EX         | Use `DILE_VT_CreateEx` instead of `DILE_VT_Create`                      | 0x1   |
+| DILE_VT           | QUIRK_DILE_VT_NO_FREEZE_CAPTURE | Do not freeze frame before capturing (higher fps)                       | 0x2   |
+| DILE_VT VTCAPTURE | QUIRK_ALTERNATIVE_DUMP_LOCATION | (webOS 3.4, VTCAPTURE) Use alternative dump location                    | 0x4   |
+| VTCAPTURE         | QUIRK_VTCAPTURE_FORCE_CAPTURE   | Use of a custom kernel module for reenable capture in special situation | 0x100 |
 
 
 They can be provided in `config.json` via the `{"quirks": 0}` field or on commandline via `--quirks`.
