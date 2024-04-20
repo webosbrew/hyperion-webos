@@ -16,6 +16,8 @@ void settings_init(settings_t* settings)
     settings->height = 180;
     settings->quirks = 0;
 
+    settings->lut_table = strdup("");
+
     settings->no_video = false;
     settings->no_gui = false;
     settings->autostart = false;
@@ -58,6 +60,13 @@ int settings_load_json(settings_t* settings, jvalue_ref source)
     if ((value = jobject_get(source, j_cstr_to_buffer("unix-socket"))) && jis_boolean(value))
         jboolean_get(value, &settings->unix_socket);
 
+    if ((value = jobject_get(source, j_cstr_to_buffer("lut-table"))) && jis_string(value)) {
+        free(settings->lut_table);
+        raw_buffer str = jstring_get(value);
+        settings->lut_table = strdup(str.m_str);
+        jstring_free_buffer(str);
+    }
+
     if ((value = jobject_get(source, j_cstr_to_buffer("fps"))) && jis_number(value))
         jnumber_get_i32(value, &settings->fps);
     if ((value = jobject_get(source, j_cstr_to_buffer("width"))) && jis_number(value))
@@ -93,6 +102,8 @@ int settings_save_json(settings_t* settings, jvalue_ref target)
     jobject_set(target, j_cstr_to_buffer("port"), jnumber_create_i32(settings->port));
     jobject_set(target, j_cstr_to_buffer("priority"), jnumber_create_i32(settings->priority));
     jobject_set(target, j_cstr_to_buffer("unix-socket"), jboolean_create(settings->unix_socket));
+
+    jobject_set(target, j_cstr_to_buffer("lut-table"), jstring_create(settings->lut_table));
 
     jobject_set(target, j_cstr_to_buffer("fps"), jnumber_create_i32(settings->fps));
     jobject_set(target, j_cstr_to_buffer("width"), jnumber_create_i32(settings->width));
