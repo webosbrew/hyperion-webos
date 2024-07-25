@@ -159,7 +159,7 @@ int get_daemon_flavor(char* host, ushort rpc_port, AmbientLightingDaemon* flavor
     return ret;
 }
 
-int set_hdr_state(char* host, ushort rpc_port, bool hdr_active)
+int set_hdr_state(char* host, ushort rpc_port, bool hdr_active, char* custom_sdr_lut)
 {
     int ret = 0;
 
@@ -180,16 +180,15 @@ int set_hdr_state(char* host, ushort rpc_port, bool hdr_active)
 
     jvalue_ref response_body_jval;
     jvalue_ref post_body = jobject_create();
-    jvalue_ref component_state_jobj = jobject_create();
-
-    // Assemble nested object first
-    // See: https://docs.hyperion-project.org/en/json/Control.html#control-components
-    jobject_set(component_state_jobj, j_cstr_to_buffer("component"), jstring_create("HDR"));
-    jobject_set(component_state_jobj, j_cstr_to_buffer("state"), jboolean_create(hdr_active));
 
     // Assemble top-level json
-    jobject_set(post_body, j_cstr_to_buffer("command"), jstring_create("componentstate"));
-    jobject_set(post_body, j_cstr_to_buffer("componentstate"), component_state_jobj);
+    // Using HDR command that was added in: https://github.com/awawa-dev/HyperHDR/pull/334
+    bool use_custom_sdr_lut = strlen(custom_sdr_lut) > 0;
+    jobject_set(post_body, j_cstr_to_buffer("command"), jstring_create("videomodehdr"));
+    jobject_set(post_body, j_cstr_to_buffer("HDR"), jnumber_create_i32(hdr_active || use_custom_sdr_lut ? 1 : 0)); // to use luts with SDR we need to enable HDR mode in hyperHDR
+    if (use_custom_sdr_lut) {
+        jobject_set(post_body, j_cstr_to_buffer("flatbuffers_user_lut_filename"), jstring_create(hdr_active ? "" : custom_sdr_lut)); // empty string = default
+    }
 
     if ((ret = send_rpc_message(host, rpc_port, post_body, &response_body_jval)) != 0) {
         WARN("set_hdr_state: Failed to send RPC message, code: %d", ret);
@@ -197,6 +196,5 @@ int set_hdr_state(char* host, ushort rpc_port, bool hdr_active)
     }
 
     j_release(&post_body);
-    j_release(&component_state_jobj);
     return ret;
 }

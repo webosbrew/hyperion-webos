@@ -443,6 +443,7 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
     raw_buffer hdr_type_buf = jstring_get(hdr_type_ref);
     const char* hdr_type_str = hdr_type_buf.m_str;
 
+    // hdr_type_str: for DynamicRange or Dolby Vision it's 'dolbyHdr', for HDR it's 'hdr and for SDR it's 'none'
     if (strcmp(hdr_type_str, "none") == 0) {
         INFO("videooutput_callback: hdrType: %s --> SDR mode", hdr_type_str);
         hdr_enabled = false;
@@ -451,7 +452,7 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
         hdr_enabled = true;
     }
 
-    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, hdr_enabled);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, hdr_enabled, service->settings->custom_sdr_lut);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }
@@ -507,7 +508,7 @@ static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* ms
         hdr_enabled = true;
     }
 
-    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, hdr_enabled);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, hdr_enabled, service->settings->custom_sdr_lut);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }

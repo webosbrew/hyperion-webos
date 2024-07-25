@@ -30,6 +30,7 @@ typedef struct _settings_t {
     bool dump_frames;
 
     bool no_hdr;
+    char* custom_sdr_lut;
     bool no_powerstate;
 } settings_t;
 
