@@ -35,6 +35,14 @@ void* connection_loop(void* data)
         } else {
             INFO("hyperion-client connected!");
             service->connected = true;
+
+            if (service->settings->sdr_on_start) {
+                int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, "sdr", service->settings->sdr_tone_mapping);
+                if (ret != 0) {
+                    ERR("startup: set_hdr_state failed, ret: %d", ret);
+                }
+            }
+
             while (service->connection_loop_running) {
                 if (hyperion_read() < 0) {
                     ERR("Error! Connection timeout.");
@@ -439,20 +447,20 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
         return false;
     }
 
-    bool hdr_enabled;
     raw_buffer hdr_type_buf = jstring_get(hdr_type_ref);
     const char* hdr_type_str = hdr_type_buf.m_str;
+    const char* dynamic_range;
 
     // hdr_type_str: for DynamicRange or Dolby Vision it's 'dolbyHdr', for HDR it's 'hdr and for SDR it's 'none'
     if (strcmp(hdr_type_str, "none") == 0) {
         INFO("videooutput_callback: hdrType: %s --> SDR mode", hdr_type_str);
-        hdr_enabled = false;
+        dynamic_range = "sdr";
     } else {
         INFO("videooutput_callback: hdrType: %s --> HDR mode", hdr_type_str);
-        hdr_enabled = true;
+        dynamic_range = hdr_type_str;
     }
 
-    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, hdr_enabled, service->settings->custom_sdr_lut);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, dynamic_range, service->settings->sdr_tone_mapping);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }
@@ -496,19 +504,17 @@ static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* ms
         return false;
     }
 
-    bool hdr_enabled;
     raw_buffer dynamic_range_buf = jstring_get(dynamic_range_ref);
     const char* dynamic_range_str = dynamic_range_buf.m_str;
 
+    // dynamic_range_str is "sdr" for SDR, dolbyHDR for dolbyVision and "hdr" for HDR?
     if (strcmp(dynamic_range_str, "sdr") == 0) {
         INFO("picture_callback: dynamicRange: %s --> SDR mode", dynamic_range_str);
-        hdr_enabled = false;
     } else {
         INFO("picture_callback: dynamicRange: %s --> HDR mode", dynamic_range_str);
-        hdr_enabled = true;
     }
 
-    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, hdr_enabled, service->settings->custom_sdr_lut);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, dynamic_range_str, service->settings->sdr_tone_mapping);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }

@@ -30,7 +30,8 @@ typedef struct _settings_t {
     bool dump_frames;
 
     bool no_hdr;
-    char* custom_sdr_lut;
+    bool sdr_tone_mapping;
+    bool sdr_on_start;
     bool no_powerstate;
 } settings_t;
 

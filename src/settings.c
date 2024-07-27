@@ -22,7 +22,8 @@ void settings_init(settings_t* settings)
     settings->vsync = true;
 
     settings->no_hdr = false;
-    settings->custom_sdr_lut = strdup("");
+    settings->sdr_tone_mapping = false;
+    settings->sdr_on_start = false;
     settings->no_powerstate = false;
 
     settings->dump_frames = false;
@@ -79,12 +80,10 @@ int settings_load_json(settings_t* settings, jvalue_ref source)
 
     if ((value = jobject_get(source, j_cstr_to_buffer("nohdr"))) && jis_boolean(value))
         jboolean_get(value, &settings->no_hdr);
-    if ((value = jobject_get(source, j_cstr_to_buffer("customsdrlut"))) && jis_string(value)) {
-        free(settings->custom_sdr_lut);
-        raw_buffer str = jstring_get(value);
-        settings->custom_sdr_lut = strdup(str.m_str);
-        jstring_free_buffer(str);
-    }
+    if ((value = jobject_get(source, j_cstr_to_buffer("sdrtonemapping"))) && jis_boolean(value))
+        jboolean_get(value, &settings->sdr_tone_mapping);
+    if ((value = jobject_get(source, j_cstr_to_buffer("sdronstart"))) && jis_boolean(value))
+        jboolean_get(value, &settings->sdr_on_start);
     if ((value = jobject_get(source, j_cstr_to_buffer("nopowerstate"))) && jis_boolean(value))
         jboolean_get(value, &settings->no_powerstate);
 
@@ -112,7 +111,8 @@ int settings_save_json(settings_t* settings, jvalue_ref target)
     jobject_set(target, j_cstr_to_buffer("autostart"), jboolean_create(settings->autostart));
 
     jobject_set(target, j_cstr_to_buffer("nohdr"), jboolean_create(settings->no_hdr));
-    jobject_set(target, j_cstr_to_buffer("customsdrlut"), jstring_create(settings->custom_sdr_lut));
+    jobject_set(target, j_cstr_to_buffer("sdrtonemapping"), jboolean_create(settings->sdr_tone_mapping));
+    jobject_set(target, j_cstr_to_buffer("sdronstart"), jboolean_create(settings->sdr_on_start));
     jobject_set(target, j_cstr_to_buffer("nopowerstate"), jboolean_create(settings->no_powerstate));
 
     return 0;

@@ -159,7 +159,7 @@ int get_daemon_flavor(char* host, ushort rpc_port, AmbientLightingDaemon* flavor
     return ret;
 }
 
-int set_hdr_state(char* host, ushort rpc_port, bool hdr_active, char* custom_sdr_lut)
+int set_hdr_state(char* host, ushort rpc_port, const char* dynamic_range, bool sdr_tone_mapping)
 {
     int ret = 0;
 
@@ -183,11 +183,14 @@ int set_hdr_state(char* host, ushort rpc_port, bool hdr_active, char* custom_sdr
 
     // Assemble top-level json
     // Using HDR command that was added in: https://github.com/awawa-dev/HyperHDR/pull/334
-    bool use_custom_sdr_lut = strlen(custom_sdr_lut) > 0;
+    bool enable_tone_mapping = sdr_tone_mapping || !strcmp(dynamic_range, "sdr");
     jobject_set(post_body, j_cstr_to_buffer("command"), jstring_create("videomodehdr"));
-    jobject_set(post_body, j_cstr_to_buffer("HDR"), jnumber_create_i32(hdr_active || use_custom_sdr_lut ? 1 : 0)); // to use luts with SDR we need to enable HDR mode in hyperHDR
-    if (use_custom_sdr_lut) {
-        jobject_set(post_body, j_cstr_to_buffer("flatbuffers_user_lut_filename"), jstring_create(hdr_active ? "" : custom_sdr_lut)); // empty string = default
+    jobject_set(post_body, j_cstr_to_buffer("HDR"), jnumber_create_i32(enable_tone_mapping ? 1 : 0));
+    if (enable_tone_mapping) {
+        char* lut_filename = malloc(strlen(dynamic_range) + 20);
+        strcpy(lut_filename, dynamic_range);
+        strcat(lut_filename, "_lut_lin_tables.3d");
+        jobject_set(post_body, j_cstr_to_buffer("flatbuffers_user_lut_filename"), jstring_create(lut_filename));
     }
 
     if ((ret = send_rpc_message(host, rpc_port, post_body, &response_body_jval)) != 0) {
