@@ -17,6 +17,7 @@ typedef struct _settings_t {
     bool unix_socket;
 
     int fps;
+    bool send_nv12;
     int width;
     int height;
     bool vsync;

@@ -67,6 +67,16 @@ int service_feed_frame(void* data __attribute__((unused)), int width, int height
     return 0;
 }
 
+int service_feed_nv12_frame(void* data __attribute__((unused)), int width, int height, uint8_t* y, uint8_t* uv, int stride_y, int stride_uv)
+{
+    int ret;
+    if ((ret = hyperion_set_nv12_image(y, uv, width, height, stride_y, stride_uv)) != 0) {
+        WARN("Frame sending failed: %d", ret);
+    }
+
+    return 0;
+}
+
 int service_init(service_t* service, settings_t* settings)
 {
     service->settings = settings;
@@ -74,7 +84,9 @@ int service_init(service_t* service, settings_t* settings)
     unicapture_init(&service->unicapture);
     service->unicapture.vsync = settings->vsync;
     service->unicapture.fps = settings->fps;
+    service->unicapture.target_format = settings->send_nv12 ? PIXFMT_YUV420_SEMI_PLANAR : PIXFMT_RGB;
     service->unicapture.callback = &service_feed_frame;
+    service->unicapture.callback_nv12 = &service_feed_nv12_frame;
     service->unicapture.callback_data = (void*)service;
     service->unicapture.dump_frames = settings->dump_frames;
 

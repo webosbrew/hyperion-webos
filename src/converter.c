@@ -1,16 +1,17 @@
 #include "converter.h"
 #include <libyuv.h>
+#include <string.h>
 
 void converter_init(converter_t* this)
 {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < MAX_PLANES; i++) {
         this->buffers[i] = NULL;
     }
 }
 
 int converter_release(converter_t* converter)
 {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < MAX_PLANES; i++) {
         if (converter->buffers[i] != NULL) {
             free(converter->buffers[i]);
         }
@@ -26,6 +27,28 @@ int converter_release(converter_t* converter)
  */
 int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, pixel_format_t target_format)
 {
+    if (input->pixel_format == target_format) {
+        output->width = input->width;
+        output->height = input->height;
+        output->pixel_format = input->pixel_format;
+        for (int i = 0; i < MAX_PLANES; i++) {
+            int size = input->height * input->planes[i].stride;
+            if (i == 1 && input->pixel_format == PIXFMT_YUV420_SEMI_PLANAR) {
+                // technically a stride of width is correct but the assumption of the amount
+                // of bytes as stride * height is wrong.
+                size /= 2;
+            }
+
+            output->planes[i].stride = input->planes[i].stride;
+            if (input->planes[i].buffer) {
+                this->buffers[i] = realloc(this->buffers[i], size);
+                memcpy(this->buffers[i], input->planes[i].buffer, size);
+                output->planes[i].buffer = this->buffers[i];
+            }
+        }
+        return 0;
+    }
+
     if (target_format == PIXFMT_ARGB) {
         output->width = input->width;
         output->height = input->height;
@@ -92,6 +115,45 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
         }
 
         output->pixel_format = PIXFMT_ARGB;
+        return 0;
+    }
+    if (target_format == PIXFMT_YUV420_SEMI_PLANAR && input->pixel_format == PIXFMT_ARGB) {
+        this->buffers[0] = realloc(this->buffers[0], input->width * input->height);
+        this->buffers[1] = realloc(this->buffers[1], input->width * input->height / 2);
+
+        output->width = input->width;
+        output->height = input->height;
+        output->planes[0].buffer = this->buffers[0];
+        output->planes[0].stride = output->width;
+        output->planes[1].buffer = this->buffers[1];
+        output->planes[1].stride = output->width;
+        output->pixel_format = PIXFMT_YUV420_SEMI_PLANAR;
+
+        ARGBToNV12(input->planes[0].buffer,
+            input->planes[0].stride,
+            output->planes[0].buffer,
+            output->planes[0].stride,
+            output->planes[1].buffer,
+            output->planes[1].stride,
+            output->width,
+            output->height);
+        return 0;
+    }
+    if (target_format == PIXFMT_RGB && input->pixel_format == PIXFMT_ARGB) {
+        this->buffers[0] = realloc(this->buffers[0], input->width * input->height * 3);
+
+        output->width = input->width;
+        output->height = input->height;
+        output->pixel_format = PIXFMT_RGB;
+        output->planes[0].buffer = this->buffers[0];
+        output->planes[0].stride = output->width * 3;
+
+        ARGBToRAW(input->planes[0].buffer,
+            input->planes[0].stride,
+            output->planes[0].buffer,
+            output->planes[0].stride,
+            output->width,
+            output->height);
         return 0;
     } else {
         // Only support ARGB for now...

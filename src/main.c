@@ -39,6 +39,7 @@ static struct option long_options[] = {
     { "version", no_argument, &print_version, 1 },
     { "config", required_argument, 0, 'c' },
     { "dump-frames", no_argument, 0, 'd' },
+    { "nv12", no_argument, 0, 't' },
     { 0, 0, 0, 0 },
 };
 
@@ -65,6 +66,7 @@ static void print_usage()
     printf("  -q, --quirks=QUIRKS   Enable certain handling for per-device quirks\n");
     printf("  -c, --config=PATH     Absolute path for configfile to load settings. Giving additional runtime arguments will overwrite loaded ones.\n");
     printf("  -d, --dump-frames     Dump raw video frames to /tmp/.\n");
+    printf("  -t, --nv12            Send NV12 frames\n");
     printf("\n");
     printf("  -v, --verbose         Enable verbose logging.\n");
     printf("  -h, --help            Print this list of arguments.\n");
@@ -76,7 +78,7 @@ static int parse_options(int argc, char* argv[])
     int opt, longindex;
     int ret;
 
-    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:q:c:lvnhdVGrs", long_options, &longindex)) != -1) {
+    while ((opt = getopt_long(argc, argv, "x:y:a:p:f:b:u:q:c:lvnhdVGrst", long_options, &longindex)) != -1) {
         switch (opt) {
         case 'x':
             settings.width = atoi(optarg);
@@ -114,6 +116,9 @@ static int parse_options(int argc, char* argv[])
             break;
         case 'd':
             settings.dump_frames = true;
+            break;
+        case 't':
+            settings.send_nv12 = true;
             break;
         case 'v':
             log_set_level(Debug);
