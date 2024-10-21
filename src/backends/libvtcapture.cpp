@@ -215,9 +215,9 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
     frame->pixel_format = PIXFMT_YUV420_SEMI_PLANAR; // ToDo: I guess?!
     frame->width = self->width;
     frame->height = self->height;
-    frame->planes[0].buffer = buff.start_addr0;
+    frame->planes[0].buffer = reinterpret_cast<uint8_t*>(buff.start_addr0);
     frame->planes[0].stride = self->stride;
-    frame->planes[1].buffer = buff.start_addr1;
+    frame->planes[1].buffer = reinterpret_cast<uint8_t*>(buff.start_addr1);
     frame->planes[1].stride = self->stride;
 
     self->curr_buff = self->buff.start_addr0;
