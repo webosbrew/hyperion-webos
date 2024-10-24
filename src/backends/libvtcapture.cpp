@@ -266,7 +266,7 @@ int capture_wait(void* state)
             DBG("Returning with video capture stop (-99), to get restarted in next routine.");
             return -99; // Restart video capture
         } else if (ret != 0) {
-
+            usleep(100000);
             ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
             return -1;
         }
@@ -280,7 +280,7 @@ int capture_wait(void* state)
             WARN("captureCurrentBuffInfo() never returned a new plane!");
             return -99; // Restart video capture
         }
-        usleep(100);
+        usleep(1000);
     }
 
     self->curr_buff = self->buff.start_addr0;
