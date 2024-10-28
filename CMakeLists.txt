@@ -9,7 +9,7 @@ list(JOIN _cflags_list " " COMMON_FLAGS)
 
 add_subdirectory(libyuv)
 add_subdirectory(tv-native-apis)
-add_subdirectory(flatccrt)
+add_subdirectory(fbs)
 
 add_compile_options(${_cflags_list} -Wall -Wextra -Wpedantic -Werror -DSECURITY_COMPATIBILITY)
 
@@ -63,8 +63,7 @@ set_target_properties(hyperion-webos PROPERTIES
     # LINK_FLAGS "-Wl,-rpath,'$ORIGIN:$ORIGIN/lib' -Wl,-z,origin"
 )
 target_include_directories(hyperion-webos PRIVATE ${CMAKE_BINARY_DIR})
-target_include_directories(hyperion-webos SYSTEM PUBLIC fbs)
-target_link_libraries(hyperion-webos flatccrt pthread dl yuv rt ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
+target_link_libraries(hyperion-webos fbs flatccrt pthread dl yuv rt ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
 add_dependencies(hyperion-webos version gm_backend dile_vt_backend halgal_backend vtcapture_backend)
 set_property(TARGET hyperion-webos PROPERTY ENABLE_EXPORTS 1)
 

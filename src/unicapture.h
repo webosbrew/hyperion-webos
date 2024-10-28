@@ -19,15 +19,16 @@ typedef enum _pixel_format {
     PIXFMT_ARGB = 12,
 } pixel_format_t;
 
+#define MAX_PLANES 4
 typedef struct _frame_info {
     pixel_format_t pixel_format;
     int width;
     int height;
 
     struct {
-        void* buffer;
+        uint8_t* buffer;
         int stride;
-    } planes[4];
+    } planes[MAX_PLANES];
 
     int internal_id;
 } frame_info_t;
@@ -75,6 +76,7 @@ typedef struct _capture_backend {
  * To be called from capture backend implementation
  */
 typedef int (*unicapture_imagedata_callback_t)(void* data, int width, int height, uint8_t* rgb_data);
+typedef int (*unicapture_imagedata_nv12_callback_t)(void* data, int width, int height, uint8_t* y, uint8_t* uv, int stride_y, int stride_uv);
 
 typedef struct _unicapture_state {
     capture_backend_t* ui_capture;
@@ -82,6 +84,7 @@ typedef struct _unicapture_state {
 
     bool vsync;
     uint32_t fps;
+    pixel_format_t target_format;
 
     bool running;
     pthread_t main_thread;
@@ -95,6 +98,7 @@ typedef struct _unicapture_state {
     pthread_cond_t vsync_cond;
 
     unicapture_imagedata_callback_t callback;
+    unicapture_imagedata_nv12_callback_t callback_nv12;
     void* callback_data;
 
     bool dump_frames;

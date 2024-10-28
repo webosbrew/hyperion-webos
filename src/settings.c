@@ -16,6 +16,7 @@ void settings_init(settings_t* settings)
     settings->height = 180;
     settings->quirks = 0;
 
+    settings->send_nv12 = false;
     settings->no_video = false;
     settings->no_gui = false;
     settings->autostart = false;
@@ -64,6 +65,8 @@ int settings_load_json(settings_t* settings, jvalue_ref source)
         jnumber_get_i32(value, &settings->width);
     if ((value = jobject_get(source, j_cstr_to_buffer("height"))) && jis_number(value))
         jnumber_get_i32(value, &settings->height);
+    if ((value = jobject_get(source, j_cstr_to_buffer("nv12"))) && jis_boolean(value))
+        jboolean_get(value, &settings->send_nv12);
     if ((value = jobject_get(source, j_cstr_to_buffer("quirks"))) && jis_number(value))
         jnumber_get_i32(value, &settings->quirks);
 
@@ -97,6 +100,7 @@ int settings_save_json(settings_t* settings, jvalue_ref target)
     jobject_set(target, j_cstr_to_buffer("fps"), jnumber_create_i32(settings->fps));
     jobject_set(target, j_cstr_to_buffer("width"), jnumber_create_i32(settings->width));
     jobject_set(target, j_cstr_to_buffer("height"), jnumber_create_i32(settings->height));
+    jobject_set(target, j_cstr_to_buffer("nv12"), jboolean_create(settings->send_nv12));
     jobject_set(target, j_cstr_to_buffer("quirks"), jnumber_create_i32(settings->quirks));
 
     jobject_set(target, j_cstr_to_buffer("vsync"), jboolean_create(settings->vsync));

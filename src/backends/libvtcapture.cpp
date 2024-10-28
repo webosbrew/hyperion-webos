@@ -215,9 +215,9 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
     frame->pixel_format = PIXFMT_YUV420_SEMI_PLANAR; // ToDo: I guess?!
     frame->width = self->width;
     frame->height = self->height;
-    frame->planes[0].buffer = buff.start_addr0;
+    frame->planes[0].buffer = reinterpret_cast<uint8_t*>(buff.start_addr0);
     frame->planes[0].stride = self->stride;
-    frame->planes[1].buffer = buff.start_addr1;
+    frame->planes[1].buffer = reinterpret_cast<uint8_t*>(buff.start_addr1);
     frame->planes[1].stride = self->stride;
 
     self->curr_buff = self->buff.start_addr0;
@@ -266,7 +266,7 @@ int capture_wait(void* state)
             DBG("Returning with video capture stop (-99), to get restarted in next routine.");
             return -99; // Restart video capture
         } else if (ret != 0) {
-
+            usleep(100000);
             ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
             return -1;
         }
@@ -280,7 +280,7 @@ int capture_wait(void* state)
             WARN("captureCurrentBuffInfo() never returned a new plane!");
             return -99; // Restart video capture
         }
-        usleep(100);
+        usleep(1000);
     }
 
     self->curr_buff = self->buff.start_addr0;

@@ -75,7 +75,24 @@ int hyperion_set_image(const unsigned char* image, int width, int height)
     flatbuffers_uint8_vec_ref_t imgData = flatcc_builder_create_type_vector(&B, image, width * height * 3);
     hyperionnet_RawImage_ref_t rawImg = hyperionnet_RawImage_create(&B, imgData, width, height);
     hyperionnet_Image_ref_t imageReq = hyperionnet_Image_create(&B, hyperionnet_ImageType_as_RawImage(rawImg), -1);
-    hyperionnet_Request_ref_t req = hyperionnet_Request_create_as_root(&B, hyperionnet_Command_as_Image(imageReq));
+    hyperionnet_Request_create_as_root(&B, hyperionnet_Command_as_Image(imageReq));
+    size_t size;
+    void* buf = flatcc_builder_finalize_buffer(&B, &size);
+    int ret = _send_message(buf, size);
+    free(buf);
+    flatcc_builder_clear(&B);
+    return ret;
+}
+
+int hyperion_set_nv12_image(const uint8_t* y, const uint8_t* uv, int width, int height, int stride_y, int stride_uv)
+{
+    flatbuffers_builder_t B;
+    flatcc_builder_init(&B);
+    flatbuffers_uint8_vec_ref_t yData = flatcc_builder_create_type_vector(&B, y, width * height);
+    flatbuffers_uint8_vec_ref_t uvData = flatcc_builder_create_type_vector(&B, uv, width * height / 2);
+    hyperionnet_RawImage_ref_t nv12Img = hyperionnet_NV12Image_create(&B, yData, uvData, width, height, stride_y, stride_uv);
+    hyperionnet_Image_ref_t imageReq = hyperionnet_Image_create(&B, hyperionnet_ImageType_as_NV12Image(nv12Img), -1);
+    hyperionnet_Request_create_as_root(&B, hyperionnet_Command_as_Image(imageReq));
     size_t size;
     void* buf = flatcc_builder_finalize_buffer(&B, &size);
     int ret = _send_message(buf, size);
@@ -91,7 +108,7 @@ int hyperion_set_register(const char* origin, int priority)
     flatbuffers_builder_t B;
     flatcc_builder_init(&B);
     hyperionnet_Register_ref_t registerReq = hyperionnet_Register_create(&B, flatcc_builder_create_string_str(&B, origin), priority);
-    hyperionnet_Request_ref_t req = hyperionnet_Request_create_as_root(&B, hyperionnet_Command_as_Register(registerReq));
+    hyperionnet_Request_create_as_root(&B, hyperionnet_Command_as_Register(registerReq));
 
     size_t size;
     void* buf = flatcc_builder_finalize_buffer(&B, &size);

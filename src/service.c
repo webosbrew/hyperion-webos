@@ -67,6 +67,16 @@ int service_feed_frame(void* data __attribute__((unused)), int width, int height
     return 0;
 }
 
+int service_feed_nv12_frame(void* data __attribute__((unused)), int width, int height, uint8_t* y, uint8_t* uv, int stride_y, int stride_uv)
+{
+    int ret;
+    if ((ret = hyperion_set_nv12_image(y, uv, width, height, stride_y, stride_uv)) != 0) {
+        WARN("Frame sending failed: %d", ret);
+    }
+
+    return 0;
+}
+
 int service_init(service_t* service, settings_t* settings)
 {
     service->settings = settings;
@@ -74,7 +84,9 @@ int service_init(service_t* service, settings_t* settings)
     unicapture_init(&service->unicapture);
     service->unicapture.vsync = settings->vsync;
     service->unicapture.fps = settings->fps;
+    service->unicapture.target_format = settings->send_nv12 ? PIXFMT_YUV420_SEMI_PLANAR : PIXFMT_RGB;
     service->unicapture.callback = &service_feed_frame;
+    service->unicapture.callback_nv12 = &service_feed_nv12_frame;
     service->unicapture.callback_data = (void*)service;
     service->unicapture.dump_frames = settings->dump_frames;
 
@@ -439,19 +451,12 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
         return false;
     }
 
-    bool hdr_enabled;
     raw_buffer hdr_type_buf = jstring_get(hdr_type_ref);
     const char* hdr_type_str = hdr_type_buf.m_str;
+    INFO("videooutput_callback: hdrType: %s", hdr_type_str);
 
-    if (strcmp(hdr_type_str, "none") == 0) {
-        INFO("videooutput_callback: hdrType: %s --> SDR mode", hdr_type_str);
-        hdr_enabled = false;
-    } else {
-        INFO("videooutput_callback: hdrType: %s --> HDR mode", hdr_type_str);
-        hdr_enabled = true;
-    }
-
-    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, hdr_enabled);
+    DynamicRange range = get_dynamic_range(hdr_type_str);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, range);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }
@@ -495,19 +500,12 @@ static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* ms
         return false;
     }
 
-    bool hdr_enabled;
     raw_buffer dynamic_range_buf = jstring_get(dynamic_range_ref);
     const char* dynamic_range_str = dynamic_range_buf.m_str;
+    INFO("picture_callback: dynamicRange: %s", dynamic_range_str);
 
-    if (strcmp(dynamic_range_str, "sdr") == 0) {
-        INFO("picture_callback: dynamicRange: %s --> SDR mode", dynamic_range_str);
-        hdr_enabled = false;
-    } else {
-        INFO("picture_callback: dynamicRange: %s --> HDR mode", dynamic_range_str);
-        hdr_enabled = true;
-    }
-
-    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, hdr_enabled);
+    DynamicRange range = get_dynamic_range(dynamic_range_str);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, range);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }
