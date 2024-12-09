@@ -199,7 +199,7 @@ int set_hdr_state(char* host, ushort rpc_port, DynamicRange range)
     jvalue_ref post_body = jobject_create();
 
     jobject_set(post_body, j_cstr_to_buffer("command"), jstring_create("videomodehdr"));
-    jobject_set(post_body, j_cstr_to_buffer("HDR"), jnumber_create_i32(range == SDR ? 0 : 1));
+    jobject_set(post_body, j_cstr_to_buffer("HDR"), jnumber_create_i32(1));
 
     const char* lut_filename = "";
     switch (range) {
