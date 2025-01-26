@@ -66,6 +66,28 @@ The calculator is your friend ;)
 
 You can find them defined here: [Source code file](https://github.com/webosbrew/hyperion-webos/blob/master/src/quirks.h)
 
+## Building
+
+You will need [buildroot-nc4](https://github.com/openlgtv/buildroot-nc4)
+(or, theoretically, some other webOS toolchain).
+
+Set `TOOLCHAIN_FILE` to the path of buildroot-nc4's `toolchainfile.cmake`.
+For example:
+
+```sh
+export TOOLCHAIN_FILE='/opt/arm-webos-linux-gnueabi_sdk-buildroot/share/buildroot/toolchainfile.cmake'
+```
+
+Then run the following commands:
+
+```sh
+git clone --recursive https://github.com/webosbrew/hyperion-webos.git
+mkdir hyperion-webos/build
+cd hyperion-webos/build
+cmake .. -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}"
+make hyperion-webos gm_backend halgal_backend dile_vt_backend vtcapture_backend
+```
+
 ## Running
 
 `hyperion-webos` together with `*_backend.so` libraries need to be copied onto
