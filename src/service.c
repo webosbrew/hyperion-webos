@@ -18,7 +18,7 @@
 //
 // SECURITY_COMPATIBILITY flag present in CMakeList disables deprecation notices, see:
 // https://github.com/webosose/luna-service2/blob/b74b1859372597fcd6f0f7d9dc3f300acbf6ed6c/include/public/luna-service2/lunaservice.h#L49-L53
-bool LSRegisterPubPriv(const char* name, LSHandle** sh,
+extern bool LSRegisterPubPriv(const char* name, LSHandle** sh,
     bool public_bus,
     LSError* lserror) __attribute__((weak));
 
@@ -524,17 +524,14 @@ int service_register(service_t* service, GMainLoop* loop)
 
     LSErrorInit(&lserror);
 
-    bool registeredLegacy = false;
-    bool registered = false;
+    DBG("Try register with LSRegister");
+    bool registered = LSRegister(SERVICE_NAME, &handle, &lserror);
 
-    if (&LSRegisterPubPriv != 0) {
-        DBG("Try register on LSRegister");
-        registered = LSRegister(SERVICE_NAME, &handle, &lserror);
-        DBG("Try legacy register on LSRegisterPubPriv");
+    bool registeredLegacy = false;
+
+    if (&LSRegisterPubPriv != NULL) {
+        DBG("Try legacy register with LSRegisterPubPriv");
         registeredLegacy = LSRegisterPubPriv(SERVICE_NAME, &handlelegacy, true, &lserror);
-    } else {
-        DBG("Try register on LSRegister");
-        registered = LSRegister(SERVICE_NAME, &handle, &lserror);
     }
 
     if (!registered && !registeredLegacy) {
