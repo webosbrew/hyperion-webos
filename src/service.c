@@ -115,7 +115,7 @@ void service_init_backends(service_t* service)
         if (settings->no_gui) {
             INFO("UI capture disabled");
         } else {
-            if (settings->ui_backend == NULL || strcmp(settings->ui_backend, "") == 0 || strcmp(settings->ui_backend, "auto") == 0) {
+            if (settings->ui_backend == NULL || settings->ui_backend[0] == '\0' || strcmp(settings->ui_backend, "auto") == 0) {
                 INFO("Autodetecting UI backend...");
                 if (unicapture_try_backends(&config, &service->ui_backend, ui_backends) == 0) {
                     service->unicapture.ui_capture = &service->ui_backend;
@@ -137,7 +137,7 @@ void service_init_backends(service_t* service)
         if (settings->no_video) {
             INFO("Video capture disabled");
         } else {
-            if (settings->video_backend == NULL || strcmp(settings->video_backend, "") == 0 || strcmp(settings->video_backend, "auto") == 0) {
+            if (settings->video_backend == NULL || settings->video_backend[0] == '\0' || strcmp(settings->video_backend, "auto") == 0) {
                 INFO("Autodetecting video backend...");
                 if (unicapture_try_backends(&config, &service->video_backend, video_backends) == 0) {
                     service->unicapture.video_capture = &service->video_backend;
