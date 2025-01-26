@@ -105,8 +105,8 @@ void service_init_backends(service_t* service)
     config.fps = settings->fps;
     config.quirks = settings->quirks;
 
-    char* ui_backends[] = { "libgm_backend.so", "libhalgal_backend.so", NULL };
-    char* video_backends[] = { "libvtcapture_backend.so", "libdile_vt_backend.so", NULL };
+    const char* const ui_backends[] = { "libgm_backend.so", "libhalgal_backend.so", NULL };
+    const char* const video_backends[] = { "libvtcapture_backend.so", "libdile_vt_backend.so", NULL };
     char backend_name[FILENAME_MAX] = { 0 };
 
     if (!service->ui_backend_initialized) {
