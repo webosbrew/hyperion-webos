@@ -15,7 +15,7 @@
         return -2;                                  \
     }
 
-int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* backend, char* name)
+int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* backend, const char* name)
 {
     char* error;
     void* handle = dlopen(name, RTLD_LAZY);
@@ -61,7 +61,7 @@ int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* bac
     return ret;
 }
 
-int unicapture_try_backends(cap_backend_config_t* config, capture_backend_t* backend, char** candidates)
+int unicapture_try_backends(cap_backend_config_t* config, capture_backend_t* backend, const char* const* candidates)
 {
     int ret = 0;
     for (int i = 0; candidates[i] != NULL; i++) {

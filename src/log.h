@@ -14,9 +14,9 @@ typedef enum {
     Debug = 7,
 } LogLevel;
 
-void log_init();
+void log_init(void);
 void log_set_level(LogLevel level);
-void log_printf(LogLevel level, const char* module, const char* fmt, ...);
+void log_printf(LogLevel level, const char* module, const char* fmt, ...) __attribute__((format(printf, 3, 4)));
 
 #define LOG(level, ...) log_printf(level, __func__, __VA_ARGS__)
 #define ERR(...) LOG(Error, __VA_ARGS__)

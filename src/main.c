@@ -1,25 +1,30 @@
+#include <errno.h>
 #include <getopt.h>
 #include <glib.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "log.h"
 #include "service.h"
 #include "settings.h"
 #include "version.h"
 
-GMainLoop* loop;
+GMainLoop* loop = NULL;
 
 settings_t settings;
 service_t service;
 bool using_cli = false;
 int print_version = 0;
 
-void int_handler(int signum __attribute__((unused)))
+static void int_handler(int signum __attribute__((unused)))
 {
     INFO("SIGINT detected, stopping...");
     g_main_loop_quit(loop);
 }
 
-static struct option long_options[] = {
+static const struct option long_options[] = {
     { "width", required_argument, 0, 'x' },
     { "height", required_argument, 0, 'y' },
     { "address", required_argument, 0, 'a' },
@@ -188,7 +193,10 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    signal(SIGINT, int_handler);
+    if (signal(SIGINT, int_handler) == SIG_ERR) {
+        WARN("Setting SIGINT handler failed: %s", strerror(errno));
+    }
+
     loop = g_main_loop_new(NULL, false);
 
     if ((ret = service_init(&service, &settings)) != 0) {

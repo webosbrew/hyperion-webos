@@ -18,7 +18,7 @@
 //
 // SECURITY_COMPATIBILITY flag present in CMakeList disables deprecation notices, see:
 // https://github.com/webosose/luna-service2/blob/b74b1859372597fcd6f0f7d9dc3f300acbf6ed6c/include/public/luna-service2/lunaservice.h#L49-L53
-bool LSRegisterPubPriv(const char* name, LSHandle** sh,
+extern bool LSRegisterPubPriv(const char* name, LSHandle** sh,
     bool public_bus,
     LSError* lserror) __attribute__((weak));
 
@@ -105,8 +105,8 @@ void service_init_backends(service_t* service)
     config.fps = settings->fps;
     config.quirks = settings->quirks;
 
-    char* ui_backends[] = { "libgm_backend.so", "libhalgal_backend.so", NULL };
-    char* video_backends[] = { "libvtcapture_backend.so", "libdile_vt_backend.so", NULL };
+    const char* const ui_backends[] = { "libgm_backend.so", "libhalgal_backend.so", NULL };
+    const char* const video_backends[] = { "libvtcapture_backend.so", "libdile_vt_backend.so", NULL };
     char backend_name[FILENAME_MAX] = { 0 };
 
     if (!service->ui_backend_initialized) {
@@ -115,7 +115,7 @@ void service_init_backends(service_t* service)
         if (settings->no_gui) {
             INFO("UI capture disabled");
         } else {
-            if (settings->ui_backend == NULL || strcmp(settings->ui_backend, "") == 0 || strcmp(settings->ui_backend, "auto") == 0) {
+            if (settings->ui_backend == NULL || settings->ui_backend[0] == '\0' || strcmp(settings->ui_backend, "auto") == 0) {
                 INFO("Autodetecting UI backend...");
                 if (unicapture_try_backends(&config, &service->ui_backend, ui_backends) == 0) {
                     service->unicapture.ui_capture = &service->ui_backend;
@@ -137,7 +137,7 @@ void service_init_backends(service_t* service)
         if (settings->no_video) {
             INFO("Video capture disabled");
         } else {
-            if (settings->video_backend == NULL || strcmp(settings->video_backend, "") == 0 || strcmp(settings->video_backend, "auto") == 0) {
+            if (settings->video_backend == NULL || settings->video_backend[0] == '\0' || strcmp(settings->video_backend, "auto") == 0) {
                 INFO("Autodetecting video backend...");
                 if (unicapture_try_backends(&config, &service->video_backend, video_backends) == 0) {
                     service->unicapture.video_capture = &service->video_backend;
@@ -331,11 +331,12 @@ bool service_method_set_settings(LSHandle* sh, LSMessage* msg, void* data)
         }
     }
 
-    if (service_destroy(service) == 0) {
-        service_init(service, service->settings);
+    bool destroyed = service_destroy(service) == 0;
+
+    service_init(service, service->settings);
+
+    if (destroyed) {
         service_start(service);
-    } else {
-        service_init(service, service->settings);
     }
 
     jvalue_ref jobj = jobject_create();
@@ -524,17 +525,14 @@ int service_register(service_t* service, GMainLoop* loop)
 
     LSErrorInit(&lserror);
 
-    bool registeredLegacy = false;
-    bool registered = false;
+    DBG("Try register with LSRegister");
+    bool registered = LSRegister(SERVICE_NAME, &handle, &lserror);
 
-    if (&LSRegisterPubPriv != 0) {
-        DBG("Try register on LSRegister");
-        registered = LSRegister(SERVICE_NAME, &handle, &lserror);
-        DBG("Try legacy register on LSRegisterPubPriv");
+    bool registeredLegacy = false;
+
+    if (&LSRegisterPubPriv != NULL) {
+        DBG("Try legacy register with LSRegisterPubPriv");
         registeredLegacy = LSRegisterPubPriv(SERVICE_NAME, &handlelegacy, true, &lserror);
-    } else {
-        DBG("Try register on LSRegister");
-        registered = LSRegister(SERVICE_NAME, &handle, &lserror);
     }
 
     if (!registered && !registeredLegacy) {
