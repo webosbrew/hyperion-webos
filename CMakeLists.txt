@@ -35,6 +35,7 @@ include_directories(${LS2_INCLUDE_DIRS})
 pkg_check_modules(PMLOG REQUIRED PmLogLib)
 include_directories(${PMLOG_INCLUDE_DIRS})
 
+add_subdirectory(unicapture)
 
 find_package(Git)
 add_custom_target(version
@@ -48,8 +49,6 @@ add_executable(hyperion-webos
     src/main.c
     src/settings.c
     src/service.c
-    src/unicapture.c
-    src/converter.c
     src/log.c
     src/utils.c
     src/hyperion_client.c
@@ -63,36 +62,6 @@ set_target_properties(hyperion-webos PROPERTIES
     # LINK_FLAGS "-Wl,-rpath,'$ORIGIN:$ORIGIN/lib' -Wl,-z,origin"
 )
 target_include_directories(hyperion-webos PRIVATE ${CMAKE_BINARY_DIR})
-target_link_libraries(hyperion-webos fbs flatccrt pthread dl yuv rt ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
-add_dependencies(hyperion-webos version gm_backend dile_vt_backend halgal_backend vtcapture_backend)
+target_link_libraries(hyperion-webos fbs flatccrt pthread dl unicapture rt ${GTHREAD2_LDFLAGS} ${PBNJSON_LDFLAGS} ${LS2_LDFLAGS} ${GLIB2_LDFLAGS} ${PMLOG_LDFLAGS})
+add_dependencies(hyperion-webos version)
 set_property(TARGET hyperion-webos PROPERTY ENABLE_EXPORTS 1)
-
-# "Unified" v2 Backends
-add_library(gm_backend SHARED
-    src/backends/libgm.c
-)
-target_include_directories(gm_backend PRIVATE src src/backends)
-target_link_libraries(gm_backend gm)
-
-add_library(dile_vt_backend SHARED
-    src/backends/libdile_vt.c
-)
-target_include_directories(dile_vt_backend PRIVATE src src/backends)
-target_link_libraries(dile_vt_backend dile_vt)
-
-# libdile_vt.so seems to be missing DT_NEEDED for libPmLogLib.so.3 - let's just
-# add it over to our library. For some reason adding PmLogLib loaded via
-# pkgconfig to target_link_libraries doesn't work...
-set_target_properties(dile_vt_backend PROPERTIES LINK_FLAGS "-lPmLogLib")
-
-add_library(halgal_backend SHARED
-    src/backends/libhalgal.c
-)
-target_include_directories(halgal_backend PRIVATE src src/backends)
-target_link_libraries(halgal_backend halgal)
-
-add_library(vtcapture_backend SHARED
-    src/backends/libvtcapture.cpp
-)
-target_include_directories(vtcapture_backend PRIVATE src src/backends)
-target_link_libraries(vtcapture_backend vtcapture)
