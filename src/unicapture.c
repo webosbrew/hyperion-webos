@@ -187,12 +187,12 @@ void* unicapture_run(void* data)
         // Convert frame to suitable video formats
         if (ui_frame.pixel_format != PIXFMT_INVALID) {
             converter_run(&ui_converter, &ui_frame, &ui_frame_converted,
-                target_format == PIXFMT_RGB ? PIXFMT_ARGB : PIXFMT_YUV420_SEMI_PLANAR);
+                (target_format == PIXFMT_RGB || target_format == PIXFMT_ARGB) ? PIXFMT_ARGB : PIXFMT_YUV420_SEMI_PLANAR);
         }
 
         if (video_frame.pixel_format != PIXFMT_INVALID) {
             converter_run(&video_converter, &video_frame, &video_frame_converted,
-                target_format == PIXFMT_RGB ? PIXFMT_ARGB : PIXFMT_YUV420_SEMI_PLANAR);
+                (target_format == PIXFMT_RGB || target_format == PIXFMT_ARGB) ? PIXFMT_ARGB : PIXFMT_YUV420_SEMI_PLANAR);
         }
 
         uint64_t frame_converted = getticks_us();
@@ -204,7 +204,7 @@ void* unicapture_run(void* data)
             const int width = video_frame_converted.width;
             const int height = video_frame_converted.height;
 
-            if (target_format == PIXFMT_RGB) {
+            if (target_format == PIXFMT_RGB || target_format == PIXFMT_ARGB) {
                 blended_frame.planes[0].buffer = realloc(blended_frame.planes[0].buffer, width * height * 4);
                 blended_frame.planes[0].stride = width * 4;
                 blended_frame.pixel_format = PIXFMT_ARGB;
@@ -266,6 +266,8 @@ void* unicapture_run(void* data)
             FILE* fd = fopen(filename, "wb");
             if (target_format == PIXFMT_RGB)
                 fwrite(final_frame.planes[0].buffer, 3 * final_frame.width * final_frame.height, 1, fd);
+            if (target_format == PIXFMT_ARGB)
+                fwrite(final_frame.planes[0].buffer, 4 * final_frame.width * final_frame.height, 1, fd);
             if (target_format == PIXFMT_YUV420_SEMI_PLANAR) {
                 fwrite(final_frame.planes[0].buffer, final_frame.width * final_frame.height, 1, fd);
                 fwrite(final_frame.planes[1].buffer, final_frame.width * final_frame.height / 2, 1, fd);
@@ -274,7 +276,7 @@ void* unicapture_run(void* data)
             INFO("Buffer dumped to: %s", filename);
         }
 
-        if (this->callback != NULL && target_format == PIXFMT_RGB) {
+        if (this->callback != NULL && (target_format == PIXFMT_RGB || target_format == PIXFMT_ARGB)) {
             this->callback(this->callback_data, final_frame.width, final_frame.height, final_frame.planes[0].buffer);
         }
 
