@@ -2,6 +2,7 @@ name: Build
 
 on:
   push:
+  workflow_dispatch:
 
 env:
   TOOLCHAIN_URL: https://github.com/openlgtv/buildroot-nc4/releases/download/webos-b17b4cc/arm-webos-linux-gnueabi_sdk-buildroot.tar.gz
@@ -18,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
         fetch-depth: 0
@@ -56,6 +57,7 @@ jobs:
         path: |
           ${{github.workspace}}/build/hyperion-webos
           ${{github.workspace}}/build/*.so
+          ${{github.workspace}}/build/unicapture/*.so
 
     - uses: DoozyX/clang-format-lint-action@v0.14
       with:
@@ -70,3 +72,4 @@ jobs:
         files: |
           ${{github.workspace}}/build/hyperion-webos
           ${{github.workspace}}/build/*.so
+          ${{github.workspace}}/build/unicapture/*.so
