@@ -56,7 +56,6 @@ jobs:
         path: |
           ${{github.workspace}}/build/hyperion-webos
           ${{github.workspace}}/build/*.so
-          ${{github.workspace}}/build/unicapture/*.so
 
     - uses: DoozyX/clang-format-lint-action@v0.14
       with:
@@ -71,4 +70,3 @@ jobs:
         files: |
           ${{github.workspace}}/build/hyperion-webos
           ${{github.workspace}}/build/*.so
-          ${{github.workspace}}/build/unicapture/*.so

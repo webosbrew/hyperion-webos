@@ -7,6 +7,8 @@ target_include_directories(unicapture PUBLIC ${UNICAPTURE_INCLUDE_DIRS})
 target_link_libraries(unicapture PUBLIC yuv)
 
 # "Unified" v2 Backends
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
 add_library(gm_backend SHARED
         backends/libgm.c
 )
