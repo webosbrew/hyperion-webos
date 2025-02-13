@@ -99,9 +99,9 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
             I422ToARGB(
                 input->planes[0].buffer,
                 input->planes[0].stride,
-                this->buffers[2],
-                input->width / 2,
                 this->buffers[1],
+                input->width / 2,
+                this->buffers[2],
                 input->width / 2,
                 output->planes[0].buffer,
                 output->planes[0].stride,
@@ -155,8 +155,47 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
             output->width,
             output->height);
         return 0;
-    } else {
-        // Only support ARGB for now...
-        return -1;
     }
+
+    if (target_format == PIXFMT_YUV420_SEMI_PLANAR && input->pixel_format == PIXFMT_YUV422_SEMI_PLANAR) {
+        this->buffers[0] = realloc(this->buffers[0], input->planes[0].stride * input->height); // Y
+        this->buffers[1] = realloc(this->buffers[1], input->width / 2 * input->height); // U
+        this->buffers[2] = realloc(this->buffers[2], input->width / 2 * input->height); // V
+        this->buffers[3] = realloc(this->buffers[3], input->width / 2 * input->height); // UV
+        SplitUVPlane(
+            input->planes[1].buffer,
+            input->planes[1].stride,
+            this->buffers[1],
+            input->width / 2,
+            this->buffers[2],
+            input->width / 2,
+            input->width / 2,
+            input->height);
+
+        // Passing the UV plane as VU to I422ToNV21 to convert to NV12
+        I422ToNV21(
+            input->planes[0].buffer,
+            input->planes[0].stride,
+            this->buffers[2],
+            input->width / 2,
+            this->buffers[1],
+            input->width / 2,
+            this->buffers[0],
+            input->planes[0].stride,
+            this->buffers[3],
+            input->width,
+            input->width,
+            input->height);
+
+        output->width = input->width;
+        output->height = input->height;
+
+        output->planes[0].buffer = this->buffers[0];
+        output->planes[0].stride = input->planes[0].stride;
+        output->planes[1].buffer = this->buffers[3];
+        output->planes[1].stride = input->width;
+        output->pixel_format = PIXFMT_YUV420_SEMI_PLANAR;
+    }
+
+    return -1;
 }
