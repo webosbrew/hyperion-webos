@@ -27,7 +27,7 @@ DynamicRange get_dynamic_range(const char* range)
 {
     if (strcmp(range, "DolbyVision") == 0 || strcmp(range, "dolbyHdr") == 0) {
         return DOLBYVISION;
-    } else if (strcmp(range, "HDR") == 0 || strcmp(range, "HDR10") == 0 || strcmp(range, "hdr10") == 0 || strcmp(range, "hdr") == 0) {
+    } else if (strstr(range, "hdr") != NULL || strstr(range, "HDR") != NULL) {
         return HDR10;
     } else if (strcmp(range, "sdr") == 0 || strcmp(range, "none") == 0) {
         return SDR;
