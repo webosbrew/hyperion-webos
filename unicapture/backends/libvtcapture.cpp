@@ -28,6 +28,15 @@ typedef struct _vtcapture_backend_state {
     bool quirk_force_capture;
 } vtcapture_backend_state_t;
 
+enum _vtcapture_dump_location {
+    SCALER_INPUT,
+    SCALER_OUTPUT,
+    DISPLAY_OUTPUT,
+    BLENDED_OUTPUT,
+    OSD_OUTPUT,
+    HISTOGRAM_OUTPUT
+};
+
 int capture_terminate(void* state);
 
 int capture_init(cap_backend_config_t* config, void** state_p)
@@ -52,7 +61,19 @@ int capture_init(cap_backend_config_t* config, void** state_p)
 
     // Sorry, no unlimited fps for you.
     self->props.frm = config->fps == 0 ? 60 : config->fps;
-    self->props.dump = HAS_QUIRK(config->quirks, QUIRK_ALTERNATIVE_DUMP_LOCATION) ? 1 : 2;
+
+    self->props.dump = DISPLAY_OUTPUT;
+    if (HAS_QUIRK(config->quirks, QUIRK_ALTERNATIVE_DUMP_LOCATION))
+        self->props.dump = SCALER_OUTPUT;
+    if (HAS_QUIRK(config->quirks, QUIRK_ALTERNATIVE_DUMP_LOCATION_2))
+        self->props.dump = SCALER_INPUT;
+    if (HAS_QUIRK(config->quirks, QUIRK_ALTERNATIVE_DUMP_LOCATION_3))
+        self->props.dump = BLENDED_OUTPUT;
+    if (HAS_QUIRK(config->quirks, QUIRK_ALTERNATIVE_DUMP_LOCATION_4))
+        self->props.dump = OSD_OUTPUT;
+    if (HAS_QUIRK(config->quirks, QUIRK_ALTERNATIVE_DUMP_LOCATION_5))
+        self->props.dump = HISTOGRAM_OUTPUT;
+
     self->props.loc.x = 0;
     self->props.loc.y = 0;
     self->props.reg.w = config->resolution_width;
