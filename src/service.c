@@ -459,7 +459,7 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
     INFO("videooutput_callback: hdrType: %s", hdr_type_str);
 
     DynamicRange range = get_dynamic_range(hdr_type_str);
-    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, range);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, service->settings->web_port, range);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }
@@ -508,7 +508,7 @@ static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* ms
     INFO("picture_callback: dynamicRange: %s", dynamic_range_str);
 
     DynamicRange range = get_dynamic_range(dynamic_range_str);
-    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, range);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, service->settings->web_port, range);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }

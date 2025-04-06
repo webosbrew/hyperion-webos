@@ -8,6 +8,7 @@ void settings_init(settings_t* settings)
 
     settings->address = strdup("");
     settings->port = 19400;
+    settings->web_port = 8090;
     settings->priority = 150;
     settings->unix_socket = false;
 
@@ -54,6 +55,8 @@ int settings_load_json(settings_t* settings, jvalue_ref source)
     }
     if ((value = jobject_get(source, j_cstr_to_buffer("port"))) && jis_number(value))
         jnumber_get_i32(value, &settings->port);
+    if ((value = jobject_get(source, j_cstr_to_buffer("web-port"))) && jis_number(value))
+        jnumber_get_i32(value, &settings->web_port);
     if ((value = jobject_get(source, j_cstr_to_buffer("priority"))) && jis_number(value))
         jnumber_get_i32(value, &settings->priority);
     if ((value = jobject_get(source, j_cstr_to_buffer("unix-socket"))) && jis_boolean(value))
@@ -94,6 +97,7 @@ int settings_save_json(settings_t* settings, jvalue_ref target)
 
     jobject_set(target, j_cstr_to_buffer("address"), jstring_create(settings->address));
     jobject_set(target, j_cstr_to_buffer("port"), jnumber_create_i32(settings->port));
+    jobject_set(target, j_cstr_to_buffer("web_port"), jnumber_create_i32(settings->web_port));
     jobject_set(target, j_cstr_to_buffer("priority"), jnumber_create_i32(settings->priority));
     jobject_set(target, j_cstr_to_buffer("unix-socket"), jboolean_create(settings->unix_socket));
 

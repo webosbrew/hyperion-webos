@@ -13,6 +13,7 @@ typedef struct _settings_t {
 
     char* address;
     int port;
+    int web_port;
     int priority;
     bool unix_socket;
 
