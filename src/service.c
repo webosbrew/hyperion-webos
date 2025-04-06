@@ -25,6 +25,7 @@ extern bool LSRegisterPubPriv(const char* name, LSHandle** sh,
 void* connection_loop(void* data)
 {
     service_t* service = (service_t*)data;
+    int res;
     DBG("Starting connection loop");
     while (service->connection_loop_running) {
         INFO("Connecting hyperion-client..");
@@ -36,8 +37,9 @@ void* connection_loop(void* data)
             INFO("hyperion-client connected!");
             service->connected = true;
             while (service->connection_loop_running) {
-                if (hyperion_read() < 0) {
-                    ERR("Error! Connection timeout.");
+                res = hyperion_read();
+                if (res < 0) {
+                    ERR("Error! Connection timeout our error code: %d errno: %s", res,  strerror(errno));
                     break;
                 }
             }
