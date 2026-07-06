@@ -150,9 +150,9 @@ int capture_init(cap_backend_config_t* config, void** state_p)
     }
 
     INFO("[DILE_VT] vfbs: %d; planes: %d", this->vfbcap.numVfbs, this->vfbcap.numPlanes);
-    uint32_t** ptr = calloc(sizeof(uint32_t*), this->vfbcap.numVfbs);
+    uint32_t** ptr = calloc(this->vfbcap.numVfbs, sizeof(uint32_t*));
     for (uint32_t vfb = 0; vfb < this->vfbcap.numVfbs; vfb++) {
-        ptr[vfb] = calloc(sizeof(uint32_t), this->vfbcap.numPlanes);
+        ptr[vfb] = calloc(this->vfbcap.numPlanes, sizeof(uint32_t));
     }
 
     this->vfbprop.ptr = ptr;

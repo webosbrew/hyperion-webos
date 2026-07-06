@@ -1,4 +1,5 @@
 #include <stdexcept>
+#include <stdio.h> // snprintf()
 #include <stdlib.h> // calloc()
 #include <unistd.h> // usleep()
 
@@ -24,6 +25,7 @@ typedef struct _vtcapture_backend_state {
     _LibVtCaptureBufferInfo buff;
     _LibVtCaptureProperties props;
     char* curr_buff;
+    bool buff_valid;
     bool terminate;
     bool quirk_force_capture;
 } vtcapture_backend_state_t;
@@ -115,7 +117,7 @@ int capture_start(void* state)
     const VT_CALLER_T* caller = "hyperion-webos_service";
     vtcapture_backend_state_t* self = (vtcapture_backend_state_t*)state;
 
-    sprintf(self->client, "%s", "00");
+    snprintf(self->client, sizeof(self->client), "%s", "00");
 
     if ((ret = vtCapture_init(self->driver, caller, self->client)) == 17) {
 
@@ -182,6 +184,7 @@ int capture_start(void* state)
         plane.activeregion.a, plane.activeregion.b, plane.activeregion.c, plane.activeregion.d);
 
     self->terminate = false;
+    self->buff_valid = false;
 
     INFO("vtcapture initialization finished.");
 
@@ -213,6 +216,7 @@ int capture_terminate(void* state)
     vtcapture_backend_state_t* self = (vtcapture_backend_state_t*)state;
 
     self->terminate = true;
+    self->buff_valid = false;
 
     vtCapture_stop(self->driver, self->client);
     vtCapture_postprocess(self->driver, self->client);
@@ -224,10 +228,9 @@ int capture_terminate(void* state)
 int capture_acquire_frame(void* state, frame_info_t* frame)
 {
     vtcapture_backend_state_t* self = (vtcapture_backend_state_t*)state;
-    _LibVtCaptureBufferInfo buff;
     int ret = 0;
 
-    if ((ret = vtCapture_currentCaptureBuffInfo(self->driver, &buff)) != 0) {
+    if (!self->buff_valid && (ret = vtCapture_currentCaptureBuffInfo(self->driver, &self->buff)) != 0) {
 
         ERR("vtCapture_currentCaptureBuffInfo() failed: %d", ret);
         return -1;
@@ -236,12 +239,13 @@ int capture_acquire_frame(void* state, frame_info_t* frame)
     frame->pixel_format = PIXFMT_YUV420_SEMI_PLANAR; // ToDo: I guess?!
     frame->width = self->width;
     frame->height = self->height;
-    frame->planes[0].buffer = reinterpret_cast<uint8_t*>(buff.start_addr0);
+    frame->planes[0].buffer = reinterpret_cast<uint8_t*>(self->buff.start_addr0);
     frame->planes[0].stride = self->stride;
-    frame->planes[1].buffer = reinterpret_cast<uint8_t*>(buff.start_addr1);
+    frame->planes[1].buffer = reinterpret_cast<uint8_t*>(self->buff.start_addr1);
     frame->planes[1].stride = self->stride;
 
     self->curr_buff = self->buff.start_addr0;
+    self->buff_valid = false;
 
     return 0;
 }
@@ -305,6 +309,7 @@ int capture_wait(void* state)
     }
 
     self->curr_buff = self->buff.start_addr0;
+    self->buff_valid = true;
 
     return 0;
 }

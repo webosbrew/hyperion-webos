@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "unicapture.h"
@@ -7,6 +8,7 @@
 typedef struct _converter {
     // Temporary conversion memory buffers
     uint8_t* buffers[4];
+    size_t capacities[4];
 } converter_t;
 
 void converter_init(converter_t* converter);

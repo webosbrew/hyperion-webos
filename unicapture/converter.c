@@ -1,11 +1,29 @@
 #include "converter.h"
 #include <libyuv.h>
+#include <stdlib.h>
 #include <string.h>
+
+static int converter_reserve(converter_t* converter, int idx, size_t size)
+{
+    if (converter->capacities[idx] >= size) {
+        return 0;
+    }
+
+    uint8_t* buffer = realloc(converter->buffers[idx], size);
+    if (!buffer) {
+        return -1;
+    }
+
+    converter->buffers[idx] = buffer;
+    converter->capacities[idx] = size;
+    return 0;
+}
 
 void converter_init(converter_t* this)
 {
     for (int i = 0; i < MAX_PLANES; i++) {
         this->buffers[i] = NULL;
+        this->capacities[i] = 0;
     }
 }
 
@@ -14,7 +32,9 @@ int converter_release(converter_t* converter)
     for (int i = 0; i < MAX_PLANES; i++) {
         if (converter->buffers[i] != NULL) {
             free(converter->buffers[i]);
+            converter->buffers[i] = NULL;
         }
+        converter->capacities[i] = 0;
     }
     return 0;
 }
@@ -41,7 +61,9 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
 
             output->planes[i].stride = input->planes[i].stride;
             if (input->planes[i].buffer) {
-                this->buffers[i] = realloc(this->buffers[i], size);
+                if (converter_reserve(this, i, size) != 0) {
+                    return -1;
+                }
                 memcpy(this->buffers[i], input->planes[i].buffer, size);
                 output->planes[i].buffer = this->buffers[i];
             }
@@ -53,7 +75,9 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
         output->width = input->width;
         output->height = input->height;
 
-        this->buffers[0] = realloc(this->buffers[0], output->width * output->height * 4);
+        if (converter_reserve(this, 0, output->width * output->height * 4) != 0) {
+            return -1;
+        }
 
         output->planes[0].buffer = this->buffers[0];
         output->planes[0].stride = output->width * 4;
@@ -85,8 +109,10 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
                 output->width,
                 output->height);
         } else if (input->pixel_format == PIXFMT_YUV422_SEMI_PLANAR) {
-            this->buffers[1] = realloc(this->buffers[1], input->width / 2 * input->height);
-            this->buffers[2] = realloc(this->buffers[2], input->width / 2 * input->height);
+            if (converter_reserve(this, 1, input->width / 2 * input->height) != 0
+                || converter_reserve(this, 2, input->width / 2 * input->height) != 0) {
+                return -1;
+            }
             SplitUVPlane(
                 input->planes[1].buffer,
                 input->planes[1].stride,
@@ -118,8 +144,10 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
         return 0;
     }
     if (target_format == PIXFMT_YUV420_SEMI_PLANAR && input->pixel_format == PIXFMT_ARGB) {
-        this->buffers[0] = realloc(this->buffers[0], input->width * input->height);
-        this->buffers[1] = realloc(this->buffers[1], input->width * input->height / 2);
+        if (converter_reserve(this, 0, input->width * input->height) != 0
+            || converter_reserve(this, 1, input->width * input->height / 2) != 0) {
+            return -1;
+        }
 
         output->width = input->width;
         output->height = input->height;
@@ -140,7 +168,9 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
         return 0;
     }
     if (target_format == PIXFMT_RGB && input->pixel_format == PIXFMT_ARGB) {
-        this->buffers[0] = realloc(this->buffers[0], input->width * input->height * 3);
+        if (converter_reserve(this, 0, input->width * input->height * 3) != 0) {
+            return -1;
+        }
 
         output->width = input->width;
         output->height = input->height;
@@ -158,10 +188,12 @@ int converter_run(converter_t* this, frame_info_t* input, frame_info_t* output, 
     }
 
     if (target_format == PIXFMT_YUV420_SEMI_PLANAR && input->pixel_format == PIXFMT_YUV422_SEMI_PLANAR) {
-        this->buffers[0] = realloc(this->buffers[0], input->planes[0].stride * input->height); // Y
-        this->buffers[1] = realloc(this->buffers[1], input->width / 2 * input->height); // U
-        this->buffers[2] = realloc(this->buffers[2], input->width / 2 * input->height); // V
-        this->buffers[3] = realloc(this->buffers[3], input->width / 2 * input->height); // UV
+        if (converter_reserve(this, 0, input->planes[0].stride * input->height) != 0 // Y
+            || converter_reserve(this, 1, input->width / 2 * input->height) != 0 // U
+            || converter_reserve(this, 2, input->width / 2 * input->height) != 0 // V
+            || converter_reserve(this, 3, input->width / 2 * input->height) != 0) { // UV
+            return -1;
+        }
         SplitUVPlane(
             input->planes[1].buffer,
             input->planes[1].stride,

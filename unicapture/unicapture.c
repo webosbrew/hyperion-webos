@@ -15,6 +15,27 @@
         return -2;                                  \
     }
 
+static int reserve_buffer(uint8_t** buffer, size_t* capacity, size_t size)
+{
+    if (*capacity >= size) {
+        return 0;
+    }
+
+    uint8_t* new_buffer = realloc(*buffer, size);
+    if (!new_buffer) {
+        return -1;
+    }
+
+    *buffer = new_buffer;
+    *capacity = size;
+    return 0;
+}
+
+static void borrow_frame(frame_info_t* output, const frame_info_t* input)
+{
+    *output = *input;
+}
+
 int unicapture_init_backend(cap_backend_config_t* config, capture_backend_t* backend, const char* name)
 {
     char* error;
@@ -129,6 +150,9 @@ void* unicapture_run(void* data)
 
     frame_info_t blended_frame = { PIXFMT_INVALID };
     frame_info_t final_frame = { PIXFMT_INVALID };
+    size_t blended_frame_capacities[MAX_PLANES] = { 0 };
+    uint8_t* blend_alpha_y = NULL;
+    size_t blend_alpha_y_capacity = 0;
 
     this->vsync_thread_running = true;
     pthread_create(&this->vsync_thread, NULL, unicapture_vsync_handler, this);
@@ -183,16 +207,23 @@ void* unicapture_run(void* data)
 
         uint64_t frame_acquired = getticks_us();
         pixel_format_t target_format = this->target_format;
+        pixel_format_t blend_format = (target_format == PIXFMT_RGB || target_format == PIXFMT_ARGB) ? PIXFMT_ARGB : PIXFMT_YUV420_SEMI_PLANAR;
 
         // Convert frame to suitable video formats
         if (ui_frame.pixel_format != PIXFMT_INVALID) {
-            converter_run(&ui_converter, &ui_frame, &ui_frame_converted,
-                (target_format == PIXFMT_RGB || target_format == PIXFMT_ARGB) ? PIXFMT_ARGB : PIXFMT_YUV420_SEMI_PLANAR);
+            if (ui_frame.pixel_format == blend_format) {
+                borrow_frame(&ui_frame_converted, &ui_frame);
+            } else {
+                converter_run(&ui_converter, &ui_frame, &ui_frame_converted, blend_format);
+            }
         }
 
         if (video_frame.pixel_format != PIXFMT_INVALID) {
-            converter_run(&video_converter, &video_frame, &video_frame_converted,
-                (target_format == PIXFMT_RGB || target_format == PIXFMT_ARGB) ? PIXFMT_ARGB : PIXFMT_YUV420_SEMI_PLANAR);
+            if (video_frame.pixel_format == blend_format) {
+                borrow_frame(&video_frame_converted, &video_frame);
+            } else {
+                converter_run(&video_converter, &video_frame, &video_frame_converted, blend_format);
+            }
         }
 
         uint64_t frame_converted = getticks_us();
@@ -205,54 +236,90 @@ void* unicapture_run(void* data)
             const int height = video_frame_converted.height;
 
             if (target_format == PIXFMT_RGB || target_format == PIXFMT_ARGB) {
-                blended_frame.planes[0].buffer = realloc(blended_frame.planes[0].buffer, width * height * 4);
-                blended_frame.planes[0].stride = width * 4;
-                blended_frame.pixel_format = PIXFMT_ARGB;
-                blended_frame.width = width;
-                blended_frame.height = height;
+                if (reserve_buffer(&blended_frame.planes[0].buffer, &blended_frame_capacities[0], width * height * 4) != 0) {
+                    got_frame = false;
+                    WARN("Unable to allocate ARGB blend buffer");
+                } else {
+                    blended_frame.planes[0].stride = width * 4;
+                    blended_frame.pixel_format = PIXFMT_ARGB;
+                    blended_frame.width = width;
+                    blended_frame.height = height;
 
-                ARGBBlend(ui_frame_converted.planes[0].buffer,
-                    ui_frame_converted.planes[0].stride,
-                    video_frame_converted.planes[0].buffer,
-                    video_frame_converted.planes[0].stride,
-                    blended_frame.planes[0].buffer,
-                    4 * width,
-                    width,
-                    height);
-            }
-
-            if (target_format == PIXFMT_YUV420_SEMI_PLANAR) {
-                blended_frame.planes[0].buffer = realloc(blended_frame.planes[0].buffer, width * height);
-                blended_frame.planes[0].stride = width;
-                blended_frame.planes[1].buffer = realloc(blended_frame.planes[1].buffer, width * height / 2);
-                blended_frame.planes[1].stride = width;
-                blended_frame.height = height;
-                blended_frame.width = width;
-                blended_frame.pixel_format = PIXFMT_YUV420_SEMI_PLANAR;
-
-                for (int i = 0; i < width * height; i++) {
-                    blended_frame.planes[0].buffer[i] = blend(ui_frame_converted.planes[0].buffer[i],
-                        video_frame_converted.planes[0].buffer[i], ui_frame.planes[0].buffer[i * 4 + 3]);
-                }
-
-                int alpha_idx = 0;
-                for (int i = 0; i < height / 2; i++) {
-                    for (int j = 0; j < width; j += 2) {
-                        int idx = i * width + j;
-                        blended_frame.planes[1].buffer[idx] = blend(ui_frame_converted.planes[1].buffer[idx],
-                            video_frame_converted.planes[1].buffer[idx], ui_frame.planes[0].buffer[alpha_idx + 3]);
-                        blended_frame.planes[1].buffer[idx + 1] = blend(ui_frame_converted.planes[1].buffer[idx + 1],
-                            video_frame_converted.planes[1].buffer[idx + 1], ui_frame.planes[0].buffer[alpha_idx + 3]);
-                        alpha_idx += 8;
-                    }
-                    alpha_idx += ui_frame.planes[0].stride;
+                    ARGBBlend(ui_frame_converted.planes[0].buffer,
+                        ui_frame_converted.planes[0].stride,
+                        video_frame_converted.planes[0].buffer,
+                        video_frame_converted.planes[0].stride,
+                        blended_frame.planes[0].buffer,
+                        4 * width,
+                        width,
+                        height);
                 }
             }
-            converter_run(&final_converter, &blended_frame, &final_frame, target_format);
+
+            if (got_frame && target_format == PIXFMT_YUV420_SEMI_PLANAR) {
+                const int uv_height = height / 2;
+
+                if (reserve_buffer(&blended_frame.planes[0].buffer, &blended_frame_capacities[0], width * height) != 0
+                    || reserve_buffer(&blended_frame.planes[1].buffer, &blended_frame_capacities[1], width * height / 2) != 0
+                    || reserve_buffer(&blend_alpha_y, &blend_alpha_y_capacity, width * height) != 0) {
+                    got_frame = false;
+                    WARN("Unable to allocate NV12 blend buffers");
+                } else {
+                    blended_frame.planes[0].stride = width;
+                    blended_frame.planes[1].stride = width;
+                    blended_frame.height = height;
+                    blended_frame.width = width;
+                    blended_frame.pixel_format = PIXFMT_YUV420_SEMI_PLANAR;
+
+                    ARGBExtractAlpha(ui_frame.planes[0].buffer,
+                        ui_frame.planes[0].stride,
+                        blend_alpha_y,
+                        width,
+                        width,
+                        height);
+
+                    BlendPlane(ui_frame_converted.planes[0].buffer,
+                        ui_frame_converted.planes[0].stride,
+                        video_frame_converted.planes[0].buffer,
+                        video_frame_converted.planes[0].stride,
+                        blend_alpha_y,
+                        width,
+                        blended_frame.planes[0].buffer,
+                        blended_frame.planes[0].stride,
+                        width,
+                        height);
+
+                    BlendPlane(ui_frame_converted.planes[1].buffer,
+                        ui_frame_converted.planes[1].stride,
+                        video_frame_converted.planes[1].buffer,
+                        video_frame_converted.planes[1].stride,
+                        blend_alpha_y,
+                        width * 2,
+                        blended_frame.planes[1].buffer,
+                        blended_frame.planes[1].stride,
+                        width,
+                        uv_height);
+                }
+            }
+            if (got_frame) {
+                if (blended_frame.pixel_format == target_format) {
+                    final_frame = blended_frame;
+                } else {
+                    converter_run(&final_converter, &blended_frame, &final_frame, target_format);
+                }
+            }
         } else if (ui_frame_converted.pixel_format != PIXFMT_INVALID) {
-            converter_run(&final_converter, &ui_frame_converted, &final_frame, target_format);
+            if (ui_frame_converted.pixel_format == target_format) {
+                borrow_frame(&final_frame, &ui_frame_converted);
+            } else {
+                converter_run(&final_converter, &ui_frame_converted, &final_frame, target_format);
+            }
         } else if (video_frame_converted.pixel_format != PIXFMT_INVALID) {
-            converter_run(&final_converter, &video_frame_converted, &final_frame, target_format);
+            if (video_frame_converted.pixel_format == target_format) {
+                borrow_frame(&final_frame, &video_frame_converted);
+            } else {
+                converter_run(&final_converter, &video_frame_converted, &final_frame, target_format);
+            }
         } else {
             got_frame = false;
             WARN("No valid frame to send...");
@@ -282,7 +349,7 @@ void* unicapture_run(void* data)
 
         if (this->callback_nv12 != NULL && target_format == PIXFMT_YUV420_SEMI_PLANAR) {
             this->callback_nv12(this->callback_data, final_frame.width, final_frame.height, final_frame.planes[0].buffer,
-                final_frame.planes[1].buffer, final_frame.width, final_frame.width);
+                final_frame.planes[1].buffer, final_frame.planes[0].stride, final_frame.planes[1].stride);
         }
 
         uint64_t frame_sent = getticks_us();
@@ -340,8 +407,10 @@ void* unicapture_run(void* data)
         if (blended_frame.planes[i].buffer != NULL) {
             free(blended_frame.planes[i].buffer);
             blended_frame.planes[i].buffer = NULL;
+            blended_frame_capacities[i] = 0;
         }
     }
+    free(blend_alpha_y);
 
     converter_release(&ui_converter);
     converter_release(&video_converter);

@@ -7,8 +7,8 @@ else ()
 endif ()
 
 ExternalProject_Add(flatcc-native
-        URL https://github.com/dvidelabs/flatcc/archive/v0.6.1.tar.gz
-        URL_HASH SHA512=46ba5ca75facc7d3360dba797d24ae7bfe539a854a48831e1c7b96528cf9594d8bea22b267678fd7c6d742b6636d9e52930987119b4c6b2e38d4abe89b990cae
+        GIT_REPOSITORY https://github.com/dvidelabs/flatcc.git
+        GIT_TAG 29201734bf2d12713a7a1a035d31e5123aac9c93
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         CMAKE_ARGS
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
@@ -53,8 +53,8 @@ else ()
 endif ()
 
 ExternalProject_Add(flatcc-target
-        URL https://github.com/dvidelabs/flatcc/archive/v0.6.1.tar.gz
-        URL_HASH SHA512=46ba5ca75facc7d3360dba797d24ae7bfe539a854a48831e1c7b96528cf9594d8bea22b267678fd7c6d742b6636d9e52930987119b4c6b2e38d4abe89b990cae
+        GIT_REPOSITORY https://github.com/dvidelabs/flatcc.git
+        GIT_TAG 29201734bf2d12713a7a1a035d31e5123aac9c93
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         CMAKE_ARGS
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}

@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -19,6 +20,7 @@
 static int _connect_unix_socket(const char* hostname);
 static int _connect_inet_socket(const char* hostname, int port);
 static int _send_message(const void* buffer, size_t size);
+static int _write_message(const void* buffer, size_t size);
 static bool _parse_reply(hyperionnet_Reply_table_t reply);
 
 static int sockfd;
@@ -88,8 +90,8 @@ int hyperion_set_nv12_image(const uint8_t* y, const uint8_t* uv, int width, int 
 {
     flatbuffers_builder_t B;
     flatcc_builder_init(&B);
-    flatbuffers_uint8_vec_ref_t yData = flatcc_builder_create_type_vector(&B, y, width * height);
-    flatbuffers_uint8_vec_ref_t uvData = flatcc_builder_create_type_vector(&B, uv, width * height / 2);
+    flatbuffers_uint8_vec_ref_t yData = flatcc_builder_create_type_vector(&B, y, stride_y * height);
+    flatbuffers_uint8_vec_ref_t uvData = flatcc_builder_create_type_vector(&B, uv, stride_uv * height / 2);
     hyperionnet_RawImage_ref_t nv12Img = hyperionnet_NV12Image_create(&B, yData, uvData, width, height, stride_y, stride_uv);
     hyperionnet_Image_ref_t imageReq = hyperionnet_Image_create(&B, hyperionnet_ImageType_as_NV12Image(nv12Img), -1);
     hyperionnet_Request_create_as_root(&B, hyperionnet_Command_as_Image(imageReq));
@@ -112,23 +114,27 @@ int hyperion_set_register(const char* origin, int priority)
 
     size_t size;
     void* buf = flatcc_builder_finalize_buffer(&B, &size);
-    uint8_t header[4] = {
-        (uint8_t)((size >> 24) & 0xFF),
-        (uint8_t)((size >> 16) & 0xFF),
-        (uint8_t)((size >> 8) & 0xFF),
-        (uint8_t)(size & 0xFF),
-    };
-
-    // write message
-    int ret = 0;
-    if (write(sockfd, header, 4) < 0)
-        ret = -1;
-    if (write(sockfd, buf, size) < 0)
-        ret = -1;
+    int ret = _write_message(buf, size);
 
     free(buf);
     flatcc_builder_clear(&B);
     return ret;
+}
+
+int _write_message(const void* buffer, size_t size)
+{
+    const uint8_t header[] = {
+        (uint8_t)((size >> 24) & 0xFF),
+        (uint8_t)((size >> 16) & 0xFF),
+        (uint8_t)((size >> 8) & 0xFF),
+        (uint8_t)(size & 0xFF)
+    };
+    const struct iovec iov[] = {
+        { (void*)header, sizeof(header) },
+        { (void*)buffer, size }
+    };
+
+    return writev(sockfd, iov, 2) == (ssize_t)(sizeof(header) + size) ? 0 : -1;
 }
 
 int _send_message(const void* buffer, size_t size)
@@ -142,20 +148,7 @@ int _send_message(const void* buffer, size_t size)
         return hyperion_set_register(_origin, _priority);
     }
 
-    const uint8_t header[] = {
-        (uint8_t)((size >> 24) & 0xFF),
-        (uint8_t)((size >> 16) & 0xFF),
-        (uint8_t)((size >> 8) & 0xFF),
-        (uint8_t)(size & 0xFF)
-    };
-
-    // write message
-    int ret = 0;
-    if (write(sockfd, header, 4) < 0)
-        ret = -1;
-    if (write(sockfd, buffer, size) < 0)
-        ret = -1;
-    return ret;
+    return _write_message(buffer, size);
 }
 
 bool _parse_reply(hyperionnet_Reply_table_t reply)
