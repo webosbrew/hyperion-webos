@@ -25,6 +25,7 @@ extern bool LSRegisterPubPriv(const char* name, LSHandle** sh,
 void* connection_loop(void* data)
 {
     service_t* service = (service_t*)data;
+    int res;
     DBG("Starting connection loop");
     while (service->connection_loop_running) {
         INFO("Connecting hyperion-client..");
@@ -36,8 +37,9 @@ void* connection_loop(void* data)
             INFO("hyperion-client connected!");
             service->connected = true;
             while (service->connection_loop_running) {
-                if (hyperion_read() < 0) {
-                    ERR("Error! Connection timeout.");
+                res = hyperion_read();
+                if (res < 0) {
+                    ERR("Error! Connection timeout our error code: %d errno: %s", res,  strerror(errno));
                     break;
                 }
             }
@@ -457,7 +459,7 @@ static bool videooutput_callback(LSHandle* sh __attribute__((unused)), LSMessage
     INFO("videooutput_callback: hdrType: %s", hdr_type_str);
 
     DynamicRange range = get_dynamic_range(hdr_type_str);
-    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, range);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, service->settings->web_port, range);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }
@@ -506,7 +508,7 @@ static bool picture_callback(LSHandle* sh __attribute__((unused)), LSMessage* ms
     INFO("picture_callback: dynamicRange: %s", dynamic_range_str);
 
     DynamicRange range = get_dynamic_range(dynamic_range_str);
-    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, RPC_PORT, range);
+    int ret = set_hdr_state(service->settings->unix_socket ? "127.0.0.1" : service->settings->address, service->settings->web_port, range);
     if (ret != 0) {
         ERR("videooutput_callback: set_hdr_state failed, ret: %d", ret);
     }

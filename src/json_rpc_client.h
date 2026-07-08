@@ -3,7 +3,6 @@
 #include "log.h"
 #include <pbnjson.h>
 
-#define RPC_PORT 8090
 
 typedef enum _AmbientLightingDaemon {
     DAEMON_INVALID = -1,
