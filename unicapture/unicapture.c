@@ -106,11 +106,10 @@ void* unicapture_vsync_handler(void* data)
     INFO("vsync thread starting...");
 
     while (this->vsync_thread_running) {
-        if (this->vsync && this->video_capture_running && this->video_capture->wait) {
+        if (this->vsync && this->video_capture_running && !this->video_capture_restart && this->video_capture->wait) {
             if ((this->video_capture->wait(this->video_capture->state)) == -99) { // stop video capture (will be started again in unicapture_run())
-                INFO("Stopping video capture.");
-                this->video_capture->terminate(this->video_capture->state);
-                this->video_capture_running = false;
+                INFO("Video capture restart requested.");
+                this->video_capture_restart = true;
             }
         } else {
             usleep(1000000 / (this->fps == 0 ? 30 : this->fps));
@@ -185,6 +184,13 @@ void* unicapture_run(void* data)
         pthread_cond_wait(&this->vsync_cond, &this->vsync_lock);
         pthread_mutex_unlock(&this->vsync_lock);
         uint64_t frame_wait = getticks_us();
+
+        if (this->video_capture_restart) {
+            INFO("Stopping video capture.");
+            video_capture->terminate(video_capture->state);
+            this->video_capture_running = false;
+            this->video_capture_restart = false;
+        }
 
         frame_info_t ui_frame = { PIXFMT_INVALID };
         frame_info_t ui_frame_converted = { PIXFMT_INVALID };
@@ -402,6 +408,7 @@ void* unicapture_run(void* data)
         video_capture->terminate(video_capture->state);
         this->video_capture_running = false;
     }
+    this->video_capture_restart = false;
 
     for (int i = 0; i < MAX_PLANES; i++) {
         if (blended_frame.planes[i].buffer != NULL) {

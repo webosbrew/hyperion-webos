@@ -91,6 +91,7 @@ typedef struct _unicapture_state {
 
     bool ui_capture_running;
     bool video_capture_running;
+    bool video_capture_restart;
 
     bool vsync_thread_running;
     pthread_t vsync_thread;
